@@ -159,6 +159,7 @@
     .pyde-gui-frame{display:flex;flex-direction:column;gap:4px;padding:4px;}
     .pyde-gui-grid{display:grid;gap:6px;align-items:center;}
     .pyde-gui-entry,.pyde-gui-text,.pyde-gui-listbox,.pyde-gui-combo{font:inherit;padding:5px;border:1px solid #999;border-radius:4px;background:#fff;color:#111;}
+    .pyde-gui-listbox{min-width:180px;padding:2px;} .pyde-gui-listbox option{padding:5px 8px;} .pyde-gui-combo{min-width:150px;}
     .pyde-gui-button{font:inherit;padding:6px 11px;border:1px solid #888;border-radius:5px;background:#eee;color:#111;cursor:pointer;}
     .pyde-gui-button:hover{background:#ddd;}
 
@@ -249,6 +250,7 @@
   <button id="tidy-btn" class="secondary" disabled title="Auto-format the code with autopep8 (PEP8 style)">&#129529; Tidy</button>
   <button id="parsons-btn" class="secondary">&#129513; Parsons</button>
   <button id="exercise-menu-btn" class="secondary">&#9989; Exercises</button>
+  <button id="examples-btn" class="secondary">&#128218; Examples</button>
   <button id="share-btn" class="secondary">&#128279; Share</button>
   <span class="font-size-group">
     <button id="font-smaller" class="secondary" title="Smaller text">A&#8722;</button>
@@ -260,6 +262,14 @@
   <span id="status"><span class="status-dot" id="status-dot"></span><span id="status-text">Loading Python runtime&hellip;</span></span>
 </header>
 
+
+<div id="examples-overlay" class="hidden">
+  <div class="examples-modal">
+    <div class="examples-head"><h2>GUI Examples</h2><button id="examples-close" class="secondary">Close</button></div>
+    <p>Choose an example to load it into the editor. Your current code will be replaced.</p>
+    <div class="examples-cols"><div><h3>Tkinter</h3><div id="tk-examples" class="examples-list"></div></div><div><h3>guizero</h3><div id="gz-examples" class="examples-list"></div></div></div>
+  </div>
+</div>
 <div id="about-overlay" class="hidden">
   <div class="about-modal">
     <h2>About this page</h2>
@@ -814,204 +824,301 @@ _p5_module.__all__ = _p5_all
 sys.modules['p5'] = _p5_module
 `;
 
-  /* ---------- Browser GUI compatibility layer: tkinter + guizero ---------- */
-  const _guiCallbacks = new Map();
-  let _guiNextId = 1;
-  function guiReset(){
-    document.getElementById('pyde-gui-body').innerHTML='';
-    document.querySelector('.pyde-gui-title').textContent='Python GUI';
-    _guiCallbacks.forEach(p=>{try{p.destroy?.()}catch(e){}}); _guiCallbacks.clear(); _guiNextId=1;
-  }
+  /* ---------- Browser GUI compatibility layer v2: tkinter + guizero ---------- */
+  const _guiCallbacks = new Map(), _guiCanvasItems = new Map(); let _guiNextId=1, _guiNextCanvasItem=1;
+  function guiReset(){document.getElementById('pyde-gui-body').innerHTML='';document.querySelector('.pyde-gui-title').textContent='Python GUI';_guiCallbacks.forEach(p=>{try{p.destroy?.()}catch(e){}});_guiCallbacks.clear();_guiCanvasItems.clear();_guiNextId=1;_guiNextCanvasItem=1;}
   function guiEl(id){return document.querySelector('[data-gui-id="'+id+'"]');}
-  window._pydeGuiCreate=function(kind,parentId,optsJson){
-    const o=JSON.parse(String(optsJson||'{}')), id=_guiNextId++;
-    const parent=parentId ? guiEl(parentId) : document.getElementById('pyde-gui-body');
-    let el;
-    if(kind==='Label'||kind==='Text') el=document.createElement('span');
-    else if(kind==='Button'||kind==='PushButton'){el=document.createElement('button');el.className='pyde-gui-button';}
-    else if(kind==='Entry'||kind==='TextBox'){el=document.createElement(o.multiline?'textarea':'input');el.className=o.multiline?'pyde-gui-text':'pyde-gui-entry';}
+  function guiInput(el){return el?.matches('input,textarea,select')?el:el?.querySelector('input,textarea,select');}
+  window._pydeGuiCreate=function(kind,parentId,optsJson){const o=JSON.parse(String(optsJson||'{}')),id=_guiNextId++,parent=parentId?guiEl(parentId):document.getElementById('pyde-gui-body');let el;
+    if(kind==='Label')el=document.createElement('span');else if(kind==='Button'){el=document.createElement('button');el.className='pyde-gui-button';}
+    else if(kind==='Entry'){el=document.createElement('input');el.className='pyde-gui-entry';}
     else if(kind==='TextArea'){el=document.createElement('textarea');el.className='pyde-gui-text';}
-    else if(kind==='Listbox'||kind==='ListBox'||kind==='Combo'){el=document.createElement('select');el.className=kind==='Combo'?'pyde-gui-combo':'pyde-gui-listbox'; if(kind!=='Combo')el.size=o.height||5;}
-    else if(kind==='Checkbutton'||kind==='CheckBox'||kind==='Radiobutton'||kind==='RadioButton'){el=document.createElement('label'); const inp=document.createElement('input'); inp.type=(kind==='Radiobutton'||kind==='RadioButton')?'radio':'checkbox'; el.append(inp,document.createTextNode(o.text||''));}
-    else if(kind==='Scale'||kind==='Slider'){el=document.createElement('input');el.type='range';el.min=o.from??o.start??0;el.max=o.to??o.end??100;}
+    else if(kind==='Listbox'||kind==='Combo'){el=document.createElement('select');el.className=kind==='Combo'?'pyde-gui-combo':'pyde-gui-listbox';if(kind==='Listbox'){el.size=Math.max(2,Number(o.rows||o.listrows||o.height||5));el.multiple=(o.selectmode==='multiple'||o.selectmode==='extended'||o.multiselect===true);}}
+    else if(kind==='Checkbutton'||kind==='Radiobutton'){el=document.createElement('label');let i=document.createElement('input');i.type=kind==='Radiobutton'?'radio':'checkbox';el.append(i,document.createTextNode(o.text||''));}
+    else if(kind==='Scale'){el=document.createElement('input');el.type='range';el.min=o.from_??o.from??0;el.max=o.to??100;el.step=o.resolution??1;}
+    else if(kind==='Spinbox'){el=document.createElement('input');el.type='number';el.min=o.from_??o.from??0;el.max=o.to??100;el.step=o.increment??1;}
+    else if(kind==='Canvas'){el=document.createElement('canvas');el.className='pyde-gui-canvas';el.width=Number(o.width||300);el.height=Number(o.height||200);_guiCanvasItems.set(id,new Map());}
+    else if(kind==='LabelFrame'){el=document.createElement('fieldset');el.className='pyde-gui-labelframe';let leg=document.createElement('legend');leg.textContent=o.text||'';el.appendChild(leg);}
+    else if(kind==='Picture'){el=document.createElement('img');el.className='pyde-gui-img';if(o.image)el.src=o.image;}
     else {el=document.createElement('div');el.className='pyde-gui-frame';}
-    el.dataset.guiId=id; el.classList.add('pyde-gui-widget'); parent.appendChild(el); window._pydeGuiConfigure(id,optsJson); return id;
-  };
-  window._pydeGuiConfigure=function(id,optsJson){const el=guiEl(id);if(!el)return;const o=JSON.parse(String(optsJson||'{}'));
-    if(o.text!==undefined){if(el.tagName==='INPUT'&&el.type==='button')el.value=o.text;else if(el.tagName==='BUTTON'||el.tagName==='SPAN')el.textContent=o.text;}
-    if(o.value!==undefined){const input=el.matches('input,textarea,select')?el:el.querySelector('input');if(input)input.value=o.value;}
-    if(o.bg)el.style.background=o.bg;if(o.background)el.style.background=o.background;if(o.fg)el.style.color=o.fg;if(o.text_color)el.style.color=o.text_color;
-    if(o.width!==undefined)el.style.width=typeof o.width==='number'?o.width+'px':o.width;if(o.height!==undefined&&!['SELECT'].includes(el.tagName))el.style.height=typeof o.height==='number'?o.height+'px':o.height;
-    if(o.items&&el.tagName==='SELECT'){el.innerHTML='';o.items.forEach(x=>{const op=document.createElement('option');op.textContent=x;op.value=x;el.appendChild(op);});}
-  };
-  window._pydeGuiLayout=function(id,mode,optsJson){const el=guiEl(id);if(!el)return;const o=JSON.parse(String(optsJson||'{}'));el.style.display='';
-    if(mode==='grid'){const p=el.parentElement;p.classList.add('pyde-gui-grid');el.style.gridRow=String((o.row??0)+1);el.style.gridColumn=String((o.column??0)+1);if(o.columnspan)el.style.gridColumnEnd='span '+o.columnspan;if(o.rowspan)el.style.gridRowEnd='span '+o.rowspan;}
-    else if(mode==='place'){el.style.position='absolute';if(o.x!==undefined)el.style.left=o.x+'px';if(o.y!==undefined)el.style.top=o.y+'px';el.parentElement.style.position='relative';}
-    else {if(o.side==='left'||o.side==='right'){el.parentElement.style.flexDirection='row';} if(o.fill==='x'||o.fill==='both')el.style.width='100%';}
-  };
-  window._pydeGuiGet=function(id){const el=guiEl(id);if(!el)return'';const input=el.matches('input,textarea,select')?el:el.querySelector('input');return input?((input.type==='checkbox'||input.type==='radio')?(input.checked?'1':'0'):input.value):el.textContent;};
-  window._pydeGuiSet=function(id,v){const el=guiEl(id);if(!el)return;const input=el.matches('input,textarea,select')?el:el.querySelector('input');if(input){if(input.type==='checkbox'||input.type==='radio')input.checked=!!v;else input.value=String(v);}else el.textContent=String(v);};
-  window._pydeGuiBind=function(id,eventName,callback){const el=guiEl(id);if(!el)return 0;const key=id+':'+eventName;_guiCallbacks.get(key)?.destroy?.();_guiCallbacks.set(key,callback);const target=el.matches('input,button,select,textarea')?el:(el.querySelector('input')||el);target.addEventListener(eventName,()=>{try{callback()}catch(e){appendConsole(String(e),'stderr')}});return 1;};
-  window._pydeGuiDestroy=function(id){guiEl(id)?.remove();};
-  window._pydeGuiTitle=function(t){document.querySelector('.pyde-gui-title').textContent=String(t);};
-  window._pydeGuiAfter=function(ms,cb){const proxy=cb;const n=setTimeout(()=>{try{proxy()}finally{try{proxy.destroy?.()}catch(e){}}},Number(ms));return n;};
-  window._pydeGuiCancelAfter=function(n){clearTimeout(Number(n));};
-  window._pydeGuiMessage=function(kind,title,msg){if(kind.startsWith('ask'))return confirm(String(title)+'\n\n'+String(msg));alert(String(title)+'\n\n'+String(msg));return 'ok';};
+    el.dataset.guiId=id;el.classList.add('pyde-gui-widget');parent.appendChild(el);window._pydeGuiConfigure(id,optsJson);return id;};
+  window._pydeGuiConfigure=function(id,j){const el=guiEl(id);if(!el)return;const o=JSON.parse(String(j||'{}')),inp=guiInput(el);if(o.text!==undefined){if(el.matches('button,span'))el.textContent=o.text;else if(el.tagName==='LABEL'&&el.lastChild)el.lastChild.textContent=o.text;}
+    if(o.value!==undefined&&inp)inp.value=String(o.value);if(o.bg||o.background)el.style.background=o.bg||o.background;if(o.fg||o.foreground||o.text_color)el.style.color=o.fg||o.foreground||o.text_color;if(o.font)el.style.font=Array.isArray(o.font)?o.font.join(' '):o.font;if(o.text_size)el.style.fontSize=o.text_size+'px';
+    if(o.width!==undefined&&el.tagName!=='CANVAS')el.style.width=typeof o.width==='number'?o.width+'px':o.width;if(o.height!==undefined&&el.tagName!=='CANVAS'&&el.tagName!=='SELECT')el.style.height=typeof o.height==='number'?o.height+'px':o.height;if(o.height!==undefined&&el.tagName==='SELECT'&&el.classList.contains('pyde-gui-listbox'))el.size=Math.max(2,Number(o.height)||5);if(o.state) {if(inp)inp.disabled=o.state==='disabled';if(el.tagName==='BUTTON')el.disabled=o.state==='disabled';}
+    if(o.items&&el.tagName==='SELECT'){el.innerHTML='';o.items.forEach(x=>{let op=document.createElement('option');op.textContent=String(x);op.value=String(x);el.appendChild(op);});}if(o.image&&el.tagName==='IMG')el.src=o.image;};
+  window._pydeGuiLayout=function(id,mode,j){const el=guiEl(id);if(!el)return;const o=JSON.parse(String(j||'{}'));el.classList.remove('pyde-gui-hidden');el.style.marginTop=(o.pady??5)+'px';el.style.marginBottom=(o.pady??5)+'px';el.style.marginLeft=(o.padx??5)+'px';el.style.marginRight=(o.padx??5)+'px';if(mode==='grid'){let p=el.parentElement;p.classList.add('pyde-gui-grid');el.style.gridRow=String((o.row??0)+1);el.style.gridColumn=String((o.column??0)+1);if(o.columnspan)el.style.gridColumnEnd='span '+o.columnspan;if(o.rowspan)el.style.gridRowEnd='span '+o.rowspan;}
+    else if(mode==='place'){el.style.position='absolute';el.parentElement.style.position='relative';if(o.x!=null)el.style.left=o.x+'px';if(o.y!=null)el.style.top=o.y+'px';}
+    else {if(o.side==='left'||o.side==='right')el.parentElement.style.flexDirection='row';if(o.fill==='x'||o.fill==='both')el.style.width='100%';if(o.expand)el.style.flex='1 1 auto';}};
+  window._pydeGuiGet=id=>{const e=guiEl(id),i=guiInput(e);if(!e)return'';if(e.tagName==='SELECT'&&e.multiple)return JSON.stringify([...e.selectedOptions].map(x=>x.value));return i?((i.type==='checkbox'||i.type==='radio')?(i.checked?'1':'0'):i.value):e.textContent;};
+  window._pydeGuiSet=(id,v)=>{const e=guiEl(id),i=guiInput(e);if(!e)return;if(i){if(i.type==='checkbox'||i.type==='radio')i.checked=!(v===false||v===0||v==='0'||v===''||v==null||String(v).toLowerCase()==='false');else i.value=String(v);}else e.textContent=String(v);};
+  window._pydeGuiChoiceSetup=function(id,kind,value,group){const e=guiEl(id),i=guiInput(e);if(!i)return;i.dataset.pyValue=String(value??'1');if(kind==='radio')i.name=String(group||'pyde-radio');};
+  window._pydeGuiChoiceValue=function(id){const i=guiInput(guiEl(id));if(!i)return '';return i.checked?(i.dataset.pyValue||'1'):'0';};
+  window._pydeGuiListSelect=function(id,value,multi){const e=guiEl(id);if(!e||e.tagName!=='SELECT')return;const vals=Array.isArray(value)?value.map(String):[String(value)];[...e.options].forEach(o=>o.selected=vals.includes(o.value));};
+  window._pydeGuiListOp=function(id,op,a,b){const e=guiEl(id);if(!e||e.tagName!=='SELECT')return'';if(op==='insert'){let x=document.createElement('option');x.textContent=String(b);x.value=String(b);let n=a==='end'?e.options.length:Number(a);e.add(x,n);}else if(op==='delete'){let n=a==='end'?e.options.length-1:Number(a);if(n>=0)e.remove(n);}else if(op==='curselection')return JSON.stringify([...e.selectedOptions].map(x=>x.index));else if(op==='get'){let n=a==='end'?e.options.length-1:Number(a);return e.options[n]?.value??'';}return'';};
+  window._pydeGuiBind=function(id,eventName,callback){const el=guiEl(id);if(!el)return 0;const target=guiInput(el)||el,key=id+':'+eventName+':'+_guiCallbacks.size;_guiCallbacks.set(key,callback);target.addEventListener(eventName,e=>{try{const payload=JSON.stringify({x:e.offsetX??0,y:e.offsetY??0,key:e.key??'',char:e.key?.length===1?e.key:'',keysym:e.key??''});if(eventName==='click'&&target.tagName==='BUTTON')callback();else callback(payload)}catch(x){appendConsole(String(x),'stderr')}});return 1;};
+  window._pydeGuiDestroy=id=>guiEl(id)?.remove();window._pydeGuiTitle=t=>document.querySelector('.pyde-gui-title').textContent=String(t);window._pydeGuiVisible=(id,v)=>guiEl(id)?.classList.toggle('pyde-gui-hidden',!v);
+  window._pydeGuiAfter=(ms,cb)=>setTimeout(()=>{try{cb()}catch(e){appendConsole(String(e),'stderr')}},Number(ms));window._pydeGuiCancelAfter=n=>clearTimeout(Number(n));window._pydeGuiMessage=(kind,t,m)=>kind.startsWith('ask')?confirm(String(t)+'\n\n'+String(m)):(alert(String(t)+'\n\n'+String(m)),'ok');
+  function canvasRedraw(cid){const c=guiEl(cid),items=_guiCanvasItems.get(cid);if(!c||!items)return;const x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);for(const [id,it] of items){const a=it.args,o=it.opts;x.save();x.strokeStyle=o.outline||o.fill||'#000';x.fillStyle=o.fill||'transparent';x.lineWidth=Number(o.width||1);x.font=o.font||'14px sans-serif';x.beginPath();if(it.kind==='line'){x.moveTo(a[0],a[1]);for(let i=2;i<a.length;i+=2)x.lineTo(a[i],a[i+1]);x.stroke();}else if(it.kind==='rectangle'){x.rect(a[0],a[1],a[2]-a[0],a[3]-a[1]);if(o.fill)x.fill();x.stroke();}else if(it.kind==='oval'){x.ellipse((a[0]+a[2])/2,(a[1]+a[3])/2,Math.abs(a[2]-a[0])/2,Math.abs(a[3]-a[1])/2,0,0,Math.PI*2);if(o.fill)x.fill();x.stroke();}else if(it.kind==='polygon'){x.moveTo(a[0],a[1]);for(let i=2;i<a.length;i+=2)x.lineTo(a[i],a[i+1]);x.closePath();if(o.fill)x.fill();x.stroke();}else if(it.kind==='text'){x.fillStyle=o.fill||'#000';x.textAlign=o.anchor==='center'?'center':'left';x.fillText(String(o.text||''),a[0],a[1]);}else if(it.kind==='arc'){x.ellipse((a[0]+a[2])/2,(a[1]+a[3])/2,Math.abs(a[2]-a[0])/2,Math.abs(a[3]-a[1])/2,0,(o.start||0)*Math.PI/180,((o.start||0)+(o.extent||90))*Math.PI/180);x.stroke();}x.restore();}}
+  window._pydeCanvasCreate=function(cid,kind,argsJson,optsJson){let id=_guiNextCanvasItem++,m=_guiCanvasItems.get(cid);m.set(id,{kind,args:JSON.parse(String(argsJson)),opts:JSON.parse(String(optsJson))});canvasRedraw(cid);return id;};
+  window._pydeCanvasOp=function(cid,op,item,argJson){let m=_guiCanvasItems.get(cid);if(!m)return'[]';if(op==='delete'){if(String(item)==='all')m.clear();else m.delete(Number(item));}else if(op==='move'){let d=JSON.parse(String(argJson)),it=m.get(Number(item));if(it)for(let i=0;i<it.args.length;i+=2){it.args[i]+=d[0];it.args[i+1]+=d[1];}}else if(op==='coords'){let it=m.get(Number(item)),a=JSON.parse(String(argJson));if(it&&a.length)it.args=a;if(it)return JSON.stringify(it.args);}else if(op==='itemconfig'){let it=m.get(Number(item));if(it)Object.assign(it.opts,JSON.parse(String(argJson)));}canvasRedraw(cid);return'[]';};
 
   const TK_GUI_SRC = `
-import sys, types, json
+import sys,types,json
 import js as _js
 from pyodide.ffi import create_proxy
-END='end'; INSERT='insert'; LEFT='left'; RIGHT='right'; TOP='top'; BOTTOM='bottom'; BOTH='both'; X='x'; Y='y'; N='n'; S='s'; E='e'; W='w'; NORMAL='normal'; DISABLED='disabled'
+END='end';INSERT='insert';LEFT='left';RIGHT='right';TOP='top';BOTTOM='bottom';BOTH='both';X='x';Y='y';N='n';S='s';E='e';W='w';NORMAL='normal';DISABLED='disabled';SINGLE='single';BROWSE='browse';MULTIPLE='multiple';EXTENDED='extended'
 def _clean(d):
-    out={}
-    for k,v in d.items():
-        if k in ('command','variable','textvariable'): continue
-        try: json.dumps(v); out[k]=v
-        except: out[k]=str(v)
-    return out
+ out={}
+ for k,v in d.items():
+  if k in ('command','variable','textvariable'):continue
+  if k=='from_':k='from_'
+  try:json.dumps(v);out[k]=v
+  except:out[k]=str(v)
+ return out
+class PyDECompatibilityError(NotImplementedError): pass
+def _unsupported(thing): raise PyDECompatibilityError('PyDE browser Tkinter does not currently support '+thing+'. This may work in full desktop Tkinter.')
+class Event:
+ def __init__(self,j='{}'):
+  try:d=json.loads(str(j))
+  except:d={}
+  self.x=d.get('x',0);self.y=d.get('y',0);self.key=d.get('key','');self.char=d.get('char','');self.keysym=d.get('keysym','')
 class Variable:
-    def __init__(self, master=None, value=None, name=None): self._v='' if value is None else value; self._widgets=[]
-    def get(self): return self._v
-    def set(self,v):
-        self._v=v
-        for w in self._widgets: _js._pydeGuiSet(w._id,v)
+ def __init__(self,master=None,value=None,name=None):self._v='' if value is None else value;self._widgets=[]
+ def get(self):return self._v
+ def set(self,v):
+  self._v=v
+  for w in self._widgets:w._variable_changed(v)
+ def trace_add(self,*a,**k):return None
 class StringVar(Variable):
-    def get(self): return str(self._v)
+ def get(self):return str(self._v)
 class IntVar(Variable):
-    def get(self):
-        try:return int(self._v)
-        except:return 0
+ def get(self):
+  try:return int(self._v)
+  except:return 0
 class DoubleVar(Variable):
-    def get(self):
-        try:return float(self._v)
-        except:return 0.0
+ def get(self):
+  try:return float(self._v)
+  except:return 0.0
 class BooleanVar(Variable):
-    def get(self): return bool(self._v)
+ def get(self):return str(self._v).lower() not in ('','0','false','none')
 class Widget:
-    _kind='Frame'
-    def __init__(self, master=None, **kw):
-        self.master=master; self._proxies=[]; self._variable=kw.get('textvariable') or kw.get('variable')
-        self._id=int(_js._pydeGuiCreate(self._kind, getattr(master,'_id',0), json.dumps(_clean(kw))))
-        if self._variable:
-            self._variable._widgets.append(self); _js._pydeGuiSet(self._id,self._variable.get())
-            self.bind('<KeyRelease>', self._sync_var); self.bind('<<ComboboxSelected>>', self._sync_var)
-        if kw.get('command'): self._set_command(kw['command'])
-    def _sync_var(self,*a): self._variable.set(self.get()) if self._variable else None
-    def _set_command(self,fn):
-        p=create_proxy(fn); self._proxies.append(p); _js._pydeGuiBind(self._id,'click',p)
-    def pack(self,**kw): _js._pydeGuiLayout(self._id,'pack',json.dumps(_clean(kw))); return self
-    def grid(self,**kw): _js._pydeGuiLayout(self._id,'grid',json.dumps(_clean(kw))); return self
-    def place(self,**kw): _js._pydeGuiLayout(self._id,'place',json.dumps(_clean(kw))); return self
-    def config(self,**kw):
-        if 'command' in kw:self._set_command(kw['command'])
-        _js._pydeGuiConfigure(self._id,json.dumps(_clean(kw)))
-    configure=config
-    def cget(self,key): return None
-    def get(self,*a): return str(_js._pydeGuiGet(self._id))
-    def insert(self,index,text):
-        cur=self.get(); _js._pydeGuiSet(self._id, str(text)+cur if str(index)=='0' else cur+str(text))
-    def delete(self,*a): _js._pydeGuiSet(self._id,'')
-    def destroy(self): _js._pydeGuiDestroy(self._id)
-    def bind(self,event,func):
-        names={'<Button-1>':'click','<KeyRelease>':'input','<Return>':'change','<<ComboboxSelected>>':'change'}; p=create_proxy(lambda *a:func(None));self._proxies.append(p);_js._pydeGuiBind(self._id,names.get(event,event),p)
+ _kind='Frame'
+ def __init__(self,master=None,**kw):
+  self.master=master;self._proxies=[];self._variable=kw.get('textvariable') or kw.get('variable');self._options=dict(kw);self._id=int(_js._pydeGuiCreate(self._kind,getattr(master,'_id',0),json.dumps(_clean(kw))))
+  if self._variable:self._variable._widgets.append(self);self._variable_changed(self._variable.get());self.bind('<KeyRelease>',self._sync);self.bind('<<ComboboxSelected>>',self._sync);self.bind('<ButtonRelease-1>',self._sync)
+  if kw.get('command'):self._command(kw['command'])
+ def _variable_changed(self,v):_js._pydeGuiSet(self._id,v)
+ def _variable_value(self):return self.get()
+ def _sync(self,*a):
+  if self._variable:self._variable.set(self._variable_value())
+ def _command(self,f):p=create_proxy(f);self._proxies.append(p);_js._pydeGuiBind(self._id,'click',p)
+ def pack(self,**kw):_js._pydeGuiLayout(self._id,'pack',json.dumps(_clean(kw)));return self
+ def grid(self,**kw):_js._pydeGuiLayout(self._id,'grid',json.dumps(_clean(kw)));return self
+ def place(self,**kw):_js._pydeGuiLayout(self._id,'place',json.dumps(_clean(kw)));return self
+ def pack_forget(self):_js._pydeGuiVisible(self._id,False)
+ grid_forget=pack_forget;place_forget=pack_forget
+ def config(self,**kw):
+  self._options.update(kw)
+  if 'command'in kw:self._command(kw['command'])
+  _js._pydeGuiConfigure(self._id,json.dumps(_clean(kw)))
+ configure=config
+ def cget(self,k):return self._options.get(k)
+ def __getitem__(self,k):return self.cget(k)
+ def __setitem__(self,k,v):self.config(**{k:v})
+ def get(self,*a):return str(_js._pydeGuiGet(self._id))
+ def insert(self,index,text):cur=self.get();_js._pydeGuiSet(self._id,str(text)+cur if str(index) in ('0','1.0') else cur+str(text))
+ def delete(self,*a):_js._pydeGuiSet(self._id,'')
+ def destroy(self):_js._pydeGuiDestroy(self._id)
+ def focus(self):return None
+ focus_set=focus
+ def bind(self,event,func,add=None):
+  names={'<Button-1>':'click','<ButtonRelease-1>':'mouseup','<Motion>':'mousemove','<Key>':'keydown','<KeyPress>':'keydown','<KeyRelease>':'keyup','<Return>':'change','<<ComboboxSelected>>':'change'};p=create_proxy(lambda j='{}':func(Event(j)));self._proxies.append(p);_js._pydeGuiBind(self._id,names.get(event,event),p);return str(len(self._proxies))
+ def winfo_exists(self):return 1
 class Tk(Widget):
-    _kind='Root'
-    def __init__(self,**kw): self.master=None;self._id=0;self._proxies=[]
-    def title(self,t): _js._pydeGuiTitle(str(t))
-    def geometry(self,*a): pass
-    def resizable(self,*a): pass
-    def mainloop(self): pass
-    def update(self): pass
-    def destroy(self): _js.guiReset() if hasattr(_js,'guiReset') else None
-    def after(self,ms,func=None,*args):
-        if func is None:return None
-        p=create_proxy(lambda:func(*args));self._proxies.append(p);return _js._pydeGuiAfter(ms,p)
-    def after_cancel(self,n): _js._pydeGuiCancelAfter(n)
+ def __init__(self,**kw):self.master=None;self._id=0;self._proxies=[];self._options={}
+ def title(self,t):_js._pydeGuiTitle(str(t))
+ def geometry(self,*a):return None
+ def resizable(self,*a):return None
+ def mainloop(self):return None
+ def update(self):return None
+ def destroy(self):return None
+ def after(self,ms,func=None,*args):
+  if func is None:return None
+  p=create_proxy(lambda:func(*args));self._proxies.append(p);return _js._pydeGuiAfter(ms,p)
+ def after_cancel(self,n):_js._pydeGuiCancelAfter(n)
+ def configure(self,**kw):
+  if 'bg'in kw or 'background'in kw:_js._pydeGuiConfigure(0,json.dumps(_clean(kw)))
+ config=configure
 class Toplevel(Tk): pass
-class Frame(Widget): _kind='Frame'
-class LabelFrame(Frame): pass
-class Label(Widget): _kind='Label'
-class Button(Widget): _kind='Button'
-class Entry(Widget): _kind='Entry'
-class Text(Widget): _kind='TextArea'
-class Listbox(Widget): _kind='Listbox'
-class Checkbutton(Widget): _kind='Checkbutton'
-class Radiobutton(Widget): _kind='Radiobutton'
-class Scale(Widget): _kind='Scale'
-class Spinbox(Entry): pass
-class Canvas(Frame): pass
-class Menu(Frame): pass
-class Scrollbar(Frame): pass
+class Frame(Widget):_kind='Frame'
+class LabelFrame(Widget):_kind='LabelFrame'
+class Label(Widget):_kind='Label'
+class Button(Widget):_kind='Button'
+class Entry(Widget):_kind='Entry'
+class Text(Widget):_kind='TextArea'
+class Checkbutton(Widget):
+ _kind='Checkbutton'
+ def __init__(self,master=None,**kw):
+  self._on=kw.get('onvalue',1);self._off=kw.get('offvalue',0);super().__init__(master,**kw);_js._pydeGuiChoiceSetup(self._id,'check',self._on,'')
+ def _variable_changed(self,v):_js._pydeGuiSet(self._id,v==self._on or str(v)==str(self._on))
+ def _variable_value(self):return self._on if str(_js._pydeGuiChoiceValue(self._id))!='0' else self._off
+class Radiobutton(Widget):
+ _kind='Radiobutton'
+ def __init__(self,master=None,**kw):
+  self._value=kw.get('value',1);super().__init__(master,**kw);_js._pydeGuiChoiceSetup(self._id,'radio',self._value,'var-'+str(id(self._variable)) if self._variable else 'radio')
+ def _variable_changed(self,v):_js._pydeGuiSet(self._id,str(v)==str(self._value))
+ def _variable_value(self):return self._value if str(_js._pydeGuiChoiceValue(self._id))!='0' else (self._variable.get() if self._variable else '')
+class Scale(Widget):
+ _kind='Scale'
+ def get(self):
+  try:return float(super().get())
+  except:return 0
+ def set(self,v):_js._pydeGuiSet(self._id,v)
+class Spinbox(Widget):_kind='Spinbox'
+class Listbox(Widget):
+ _kind='Listbox'
+ def insert(self,index,*els):
+  for e in els:_js._pydeGuiListOp(self._id,'insert',str(index),str(e))
+ def delete(self,first,last=None):_js._pydeGuiListOp(self._id,'delete',str(first),'')
+ def get(self,index,*a):return str(_js._pydeGuiListOp(self._id,'get',str(index),''))
+ def curselection(self):return tuple(json.loads(str(_js._pydeGuiListOp(self._id,'curselection','',''))))
 class OptionMenu(Widget):
-    _kind='Combo'
-    def __init__(self,master,variable,*values,**kw): kw['items']=list(values);kw['variable']=variable;super().__init__(master,**kw)
+ _kind='Combo'
+ def __init__(self,master,variable,value,*values,command=None,**kw):kw['items']=[value,*values];kw['variable']=variable;super().__init__(master,**kw);_js._pydeGuiSet(self._id,variable.get() or value)
+class Canvas(Widget):
+ _kind='Canvas'
+ def _c(self,k,a,kw):return int(_js._pydeCanvasCreate(self._id,k,json.dumps(list(a)),json.dumps(_clean(kw))))
+ def create_line(self,*a,**kw):return self._c('line',a,kw)
+ def create_rectangle(self,*a,**kw):return self._c('rectangle',a,kw)
+ def create_oval(self,*a,**kw):return self._c('oval',a,kw)
+ def create_polygon(self,*a,**kw):return self._c('polygon',a,kw)
+ def create_text(self,*a,**kw):return self._c('text',a,kw)
+ def create_arc(self,*a,**kw):return self._c('arc',a,kw)
+ def delete(self,item):_js._pydeCanvasOp(self._id,'delete',str(item),'[]')
+ def move(self,item,dx,dy):_js._pydeCanvasOp(self._id,'move',item,json.dumps([dx,dy]))
+ def coords(self,item,*a):return tuple(json.loads(str(_js._pydeCanvasOp(self._id,'coords',item,json.dumps(list(a))))))
+ def itemconfig(self,item,**kw):_js._pydeCanvasOp(self._id,'itemconfig',item,json.dumps(_clean(kw)))
+ itemconfigure=itemconfig
+class Menu(Widget):
+ def add_command(self,*a,**k):_unsupported('Menu.add_command()')
+class Scrollbar(Widget):pass
 class _Msg:
-    def showinfo(self,t,m):return _js._pydeGuiMessage('info',t,m)
-    def showwarning(self,t,m):return _js._pydeGuiMessage('warning',t,m)
-    def showerror(self,t,m):return _js._pydeGuiMessage('error',t,m)
-    def askyesno(self,t,m):return bool(_js._pydeGuiMessage('askyesno',t,m))
-    def askokcancel(self,t,m):return bool(_js._pydeGuiMessage('askokcancel',t,m))
+ def showinfo(self,t,m):return _js._pydeGuiMessage('info',t,m)
+ def showwarning(self,t,m):return _js._pydeGuiMessage('warning',t,m)
+ def showerror(self,t,m):return _js._pydeGuiMessage('error',t,m)
+ def askyesno(self,t,m):return bool(_js._pydeGuiMessage('askyesno',t,m))
+ def askokcancel(self,t,m):return bool(_js._pydeGuiMessage('askokcancel',t,m))
 messagebox=_Msg()
-_mod=types.ModuleType('tkinter');_mod.__dict__.update({k:v for k,v in globals().items() if not k.startswith('_')});sys.modules['tkinter']=_mod
-_mm=types.ModuleType('tkinter.messagebox');_mm.showinfo=messagebox.showinfo;_mm.showwarning=messagebox.showwarning;_mm.showerror=messagebox.showerror;_mm.askyesno=messagebox.askyesno;_mm.askokcancel=messagebox.askokcancel;sys.modules['tkinter.messagebox']=_mm
+def _module_getattr(name):
+ if name.startswith('__'):raise AttributeError(name)
+ _unsupported('tkinter.'+name)
+_mod=types.ModuleType('tkinter');_mod.__dict__.update({k:v for k,v in globals().items() if not k.startswith('_')});_mod.__getattr__=_module_getattr;sys.modules['tkinter']=_mod
+_mm=types.ModuleType('tkinter.messagebox');[setattr(_mm,n,getattr(messagebox,n)) for n in ('showinfo','showwarning','showerror','askyesno','askokcancel')];sys.modules['tkinter.messagebox']=_mm
+_ttk=types.ModuleType('tkinter.ttk');_ttk.Frame=Frame;_ttk.Label=Label;_ttk.Button=Button;_ttk.Entry=Entry;_ttk.Checkbutton=Checkbutton;_ttk.Radiobutton=Radiobutton;sys.modules['tkinter.ttk']=_ttk
 `;
   const GUIZERO_SRC = `
-import sys, types, json
-import tkinter as tk
+import sys,types,tkinter as tk
+import js as _js
+class PyDEGuizeroCompatibilityError(NotImplementedError):pass
+def _parent(m):return getattr(m,'_widget',m)
 class _G:
-    def __init__(self): self._widget=None
-    @property
-    def value(self): return self._widget.get()
-    @value.setter
-    def value(self,v):
-        self._widget.delete(0,'end'); self._widget.insert(0,v)
-    @property
-    def visible(self): return True
-    @visible.setter
-    def visible(self,v): pass
-    @property
-    def enabled(self): return True
-    @enabled.setter
-    def enabled(self,v): self._widget.config(state='normal' if v else 'disabled')
-    @property
-    def bg(self): return ''
-    @bg.setter
-    def bg(self,v): self._widget.config(bg=v)
+ @property
+ def value(self):return self._widget.get()
+ @value.setter
+ def value(self,v):
+  try:self._widget.delete(0,'end');self._widget.insert(0,v)
+  except:self._widget.config(text=str(v))
+ @property
+ def visible(self):return True
+ @visible.setter
+ def visible(self,v):_js._pydeGuiVisible(self._widget._id,bool(v))
+ def hide(self):_js._pydeGuiVisible(self._widget._id,False)
+ def show(self):_js._pydeGuiVisible(self._widget._id,True)
+ def enable(self):self._widget.config(state='normal')
+ def disable(self):self._widget.config(state='disabled')
+ @property
+ def enabled(self):return self._widget.cget('state')!='disabled'
+ @enabled.setter
+ def enabled(self,v):self.enable() if v else self.disable()
+ @property
+ def bg(self):return self._widget.cget('bg')
+ @bg.setter
+ def bg(self,v):self._widget.config(bg=v)
+ @property
+ def text_color(self):return self._widget.cget('fg')
+ @text_color.setter
+ def text_color(self,v):self._widget.config(fg=v)
+ @property
+ def text_size(self):return self._widget.cget('text_size')
+ @text_size.setter
+ def text_size(self,v):self._widget.config(text_size=v)
 class App(_G):
-    def __init__(self,title='guizero',width=None,height=None,**kw):self.tk=tk.Tk();self.tk.title(title);self._widget=self.tk
-    def display(self): self.tk.mainloop()
-    def destroy(self): self.tk.destroy()
+ def __init__(self,title='guizero',width=None,height=None,bg=None,layout='auto',**kw):self.tk=tk.Tk();self.tk.title(title);self._widget=self.tk
+ def display(self):self.tk.mainloop()
+ def destroy(self):self.tk.destroy()
 class Window(App):
-    def __init__(self,master,title='Window',**kw):super().__init__(title=title,**kw)
-def _parent(master): return getattr(master,'_widget',master)
+ def __init__(self,master,title='Window',**kw):super().__init__(title=title,**kw)
 class Box(_G):
-    def __init__(self,master,layout='auto',**kw):self._widget=tk.Frame(_parent(master));self._widget.pack()
+ def __init__(self,master,layout='auto',grid=None,width=None,height=None,**kw):self._widget=tk.Frame(_parent(master),width=width,height=height,**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
 class Text(_G):
-    def __init__(self,master,text='',**kw):self._widget=tk.Label(_parent(master),text=text,**kw);self._widget.pack()
-    @property
-    def value(self): return self._widget.get()
-    @value.setter
-    def value(self,v): self._widget.config(text=str(v))
+ def __init__(self,master,text='',grid=None,**kw):self._widget=tk.Label(_parent(master),text=text,**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
+ @property
+ def value(self):return self._widget.cget('text') or ''
+ @value.setter
+ def value(self,v):self._widget.config(text=str(v))
 class TextBox(_G):
-    def __init__(self,master,text='',multiline=False,**kw):self._widget=(tk.Text if multiline else tk.Entry)(_parent(master),**kw);self._widget.pack();self.value=text
+ def __init__(self,master,text='',multiline=False,grid=None,**kw):self._widget=(tk.Text if multiline else tk.Entry)(_parent(master),**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack();self.value=text
 class PushButton(_G):
-    def __init__(self,master,command=None,text='Button',args=None,**kw):
-        cb=(lambda:command(*(args or []))) if command else None;self._widget=tk.Button(_parent(master),text=text,command=cb,**kw);self._widget.pack()
+ def __init__(self,master,command=None,text='Button',args=None,grid=None,**kw):cb=(lambda:command(*(args or []))) if command else None;self._widget=tk.Button(_parent(master),text=text,command=cb,**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
 class CheckBox(_G):
-    def __init__(self,master,text='',**kw):self._v=tk.IntVar(value=0);self._widget=tk.Checkbutton(_parent(master),text=text,variable=self._v,**kw);self._widget.pack()
-    @property
-    def value(self):return self._v.get()
-    @value.setter
-    def value(self,v):self._v.set(v)
+ def __init__(self,master,text='',command=None,grid=None,**kw):self._v=tk.IntVar(value=0);self._widget=tk.Checkbutton(_parent(master),text=text,variable=self._v,command=command,**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
+ @property
+ def value(self):return self._v.get()
+ @value.setter
+ def value(self,v):self._v.set(v)
 class Combo(_G):
-    def __init__(self,master,options=None,**kw):self._widget=tk.Widget.__new__(tk.Widget);tk.Widget.__init__(self._widget,_parent(master),items=options or []);self._widget.pack()
-class ListBox(Combo): pass
-class RadioButton(Combo): pass
+ def __init__(self,master,options=None,selected=None,command=None,grid=None,**kw):self._v=tk.StringVar(value=selected or ((options or [''])[0]));self._widget=tk.OptionMenu(_parent(master),self._v,*(options or ['']),**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
+ @property
+ def value(self):return self._widget.get()
+ @value.setter
+ def value(self,v):self._v.set(v);_js._pydeGuiSet(self._widget._id,v)
+class ListBox(_G):
+ def __init__(self,master,items=None,selected=None,command=None,grid=None,multiselect=False,scrollbar=False,width=None,height=None,**kw):
+  self._multiselect=multiselect
+  mode=tk.EXTENDED if multiselect else tk.BROWSE
+  self._widget=tk.Listbox(_parent(master),selectmode=mode,height=height or 5,**kw)
+  self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
+  [self._widget.insert('end',x) for x in (items or [])]
+  if selected is not None:_js._pydeGuiListSelect(self._widget._id,selected,multiselect)
+  if command:
+   def changed(event=None):
+    try:command(self.value)
+    except TypeError:command()
+   self._widget.bind('<<ComboboxSelected>>',changed)
+ @property
+ def value(self):
+  s=self._widget.curselection()
+  if not s:return None
+  values=[self._widget.get(i) for i in s]
+  return values if self._multiselect else values[0]
+ @value.setter
+ def value(self,v):_js._pydeGuiListSelect(self._widget._id,v,self._multiselect)
+ def append(self,item):self._widget.insert('end',item)
+ def clear(self):
+  while self._widget.get(0):self._widget.delete(0)
+class RadioButton(Combo):pass
 class Slider(_G):
-    def __init__(self,master,start=0,end=100,**kw):self._widget=tk.Scale(_parent(master),start=start,end=end,**kw);self._widget.pack()
-class Picture(Text): pass
-_mod=types.ModuleType('guizero');_mod.__dict__.update({k:v for k,v in globals().items() if not k.startswith('_')});sys.modules['guizero']=_mod
+ def __init__(self,master,start=0,end=100,command=None,grid=None,**kw):self._widget=tk.Scale(_parent(master),from_=start,to=end,command=command,**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
+ @property
+ def value(self):return self._widget.get()
+ @value.setter
+ def value(self,v):self._widget.set(v)
+class Picture(_G):
+ def __init__(self,master,image=None,grid=None,**kw):self._widget=tk.Widget.__new__(tk.Widget);self._widget._kind='Picture';tk.Widget.__init__(self._widget,_parent(master),image=image,**kw);self._widget.grid(row=grid[1],column=grid[0]) if grid else self._widget.pack()
+def __getattr__(name):
+ if name.startswith('__'):raise AttributeError(name)
+ raise PyDEGuizeroCompatibilityError('PyDE browser guizero does not currently support guizero.'+name+'. This may work with the full desktop guizero package.')
+_mod=types.ModuleType('guizero');_mod.__dict__.update({k:v for k,v in globals().items() if not k.startswith('_')});_mod.__getattr__=__getattr__;_mod.__package__='';sys.modules['guizero']=_mod
 `;
 /* Share payloads are either a plain code string (the original format - kept
    so old links never break) or, when a program input file needs to travel
@@ -2336,7 +2443,7 @@ if(pendingExercise){
   }else{
     document.getElementById('exercise-example').classList.add('hidden');
   }
-  ['parsons-btn','new-btn','upload-btn'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+  ['parsons-btn','new-btn','upload-btn','examples-btn'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
   document.querySelectorAll('.tab-btn[data-tab="graphics"],.tab-btn[data-tab="files"]').forEach(el=>el.classList.add('hidden'));
   document.querySelector('#tab-exercise h2').textContent='Exercise';
   ['exercise-run','exercise-share','exercise-add'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
@@ -2354,6 +2461,52 @@ if(pendingExercise){
   // Capture before the normal Share handler runs so only the exercise-submission link is produced.
   topShare.addEventListener('click',(e)=>{e.stopImmediatePropagation();shareStudentExerciseSolution();},true);
 }
+  /* ---------- GUI examples ---------- */
+  const GUI_EXAMPLES={
+    tkinter:{
+      'Hello World':`import tkinter as tk\nroot=tk.Tk(); root.title("Hello")\ntk.Label(root,text="Hello from Tkinter!").pack()\nroot.mainloop()`,
+      'Entry and output':`import tkinter as tk\nroot=tk.Tk(); root.title("Greeting")\ndef greet(): output.config(text="Hello " + name.get())\ntk.Label(root,text="Your name:").pack()\nname=tk.Entry(root); name.pack()\ntk.Button(root,text="Greet",command=greet).pack()\noutput=tk.Label(root,text=""); output.pack()\nroot.mainloop()`,
+      'Variables and checkboxes':`import tkinter as tk\nroot=tk.Tk(); root.title("Variables")\nname=tk.StringVar(value="Andrew")\nlikes=tk.BooleanVar(value=True)\ntk.Entry(root,textvariable=name).pack()\ntk.Checkbutton(root,text="I like Python",variable=likes).pack()\ndef show(): result.config(text=f"{name.get()}: {likes.get()}")\ntk.Button(root,text="Show",command=show).pack()\nresult=tk.Label(root); result.pack()\nroot.mainloop()`,
+      'Radio buttons':`import tkinter as tk\nroot=tk.Tk(); choice=tk.StringVar(value="Python")\nfor x in ["Python","Java","C#"]: tk.Radiobutton(root,text=x,variable=choice,value=x).pack()\nlabel=tk.Label(root); label.pack()\ntk.Button(root,text="Show",command=lambda:label.config(text=choice.get())).pack()\nroot.mainloop()`,
+      'Listbox':`import tkinter as tk\nroot=tk.Tk(); box=tk.Listbox(root,height=5); box.pack()\nfor x in ["Red","Green","Blue","Purple"]: box.insert(tk.END,x)\nout=tk.Label(root); out.pack()\ndef show():\n    s=box.curselection(); out.config(text=box.get(s[0]) if s else "Nothing selected")\ntk.Button(root,text="Show selection",command=show).pack(); root.mainloop()`,
+      'OptionMenu':`import tkinter as tk\nroot=tk.Tk(); colour=tk.StringVar(value="Red")\ntk.OptionMenu(root,colour,"Red","Green","Blue").pack()\ntk.Label(root,textvariable=colour).pack(); root.mainloop()`,
+      'Grid calculator':`import tkinter as tk\nroot=tk.Tk(); root.title("Adder")\na=tk.Entry(root); b=tk.Entry(root); result=tk.Label(root)\ntk.Label(root,text="A").grid(row=0,column=0); a.grid(row=0,column=1)\ntk.Label(root,text="B").grid(row=1,column=0); b.grid(row=1,column=1)\ndef add(): result.config(text=str(float(a.get())+float(b.get())))\ntk.Button(root,text="Add",command=add).grid(row=2,column=0); result.grid(row=2,column=1)\nroot.mainloop()`,
+      'Timer':`import tkinter as tk\nroot=tk.Tk(); label=tk.Label(root,text="0"); label.pack(); count=0\ndef tick():\n    global count\n    count += 1; label.config(text=str(count)); root.after(1000,tick)\ntick(); root.mainloop()`,
+      'Canvas shapes':`import tkinter as tk\nroot=tk.Tk(); c=tk.Canvas(root,width=400,height=250,bg="white"); c.pack()\nc.create_rectangle(20,20,150,100,fill="skyblue",outline="navy",width=3)\nc.create_oval(180,20,300,120,fill="tomato")\nc.create_line(20,160,360,160,fill="green",width=5)\nc.create_polygon(70,220,130,170,190,220,fill="gold")\nc.create_text(300,210,text="Canvas",fill="purple",font="20px sans-serif")\nroot.mainloop()`,
+      'Canvas animation':`import tkinter as tk\nroot=tk.Tk(); c=tk.Canvas(root,width=400,height=180,bg="white"); c.pack()\nball=c.create_oval(10,70,50,110,fill="royalblue"); dx=4\ndef animate():\n    global dx\n    x1,y1,x2,y2=c.coords(ball)\n    if x2>=400 or x1<=0: dx=-dx\n    c.move(ball,dx,0); root.after(20,animate)\nanimate(); root.mainloop()`,
+      'Mouse events':`import tkinter as tk\nroot=tk.Tk(); c=tk.Canvas(root,width=400,height=250,bg="white"); c.pack()\ndef click(e): c.create_oval(e.x-5,e.y-5,e.x+5,e.y+5,fill="red")\nc.bind("<Button-1>",click); root.mainloop()`},
+    guizero:{
+      'Hello World':`from guizero import App, Text\napp=App(title="Hello")\nText(app,text="Hello from guizero!")\napp.display()`,
+      'TextBox and button':`from guizero import App,Text,TextBox,PushButton\napp=App(title="Greeting")\nText(app,text="Your name:"); name=TextBox(app); message=Text(app,text="")\ndef greet(): message.value="Hello "+name.value\nPushButton(app,text="Greet",command=greet); app.display()`,
+      'Calculator':`from guizero import App,Text,TextBox,PushButton\napp=App(title="Adder"); a=TextBox(app); b=TextBox(app); result=Text(app,text="")\ndef add(): result.value=str(float(a.value)+float(b.value))\nPushButton(app,text="Add",command=add); app.display()`,
+      'CheckBox':`from guizero import App,Text,CheckBox,PushButton\napp=App(); check=CheckBox(app,text="I like Python"); out=Text(app,text="")\nPushButton(app,text="Show",command=lambda:setattr(out,"value",str(check.value))); app.display()`,
+      'Combo':`from guizero import App,Text,Combo,PushButton\napp=App(); choice=Combo(app,options=["Red","Green","Blue"]); out=Text(app,text="")\nPushButton(app,text="Show",command=lambda:setattr(out,"value",choice.value)); app.display()`,
+      'ListBox':`from guizero import App,Text,ListBox,PushButton\napp=App(); box=ListBox(app,items=["Cat","Dog","Rabbit"]); out=Text(app,text="")\nPushButton(app,text="Show",command=lambda:setattr(out,"value",str(box.value))); app.display()`,
+      'Slider':`from guizero import App,Text,Slider,PushButton\napp=App(); slider=Slider(app,start=0,end=100); out=Text(app,text="")\nPushButton(app,text="Value",command=lambda:setattr(out,"value",str(slider.value))); app.display()`,
+      'Box grid layout':`from guizero import App,Box,Text,PushButton\napp=App(title="Boxes")\nbox=Box(app,layout="grid")\nText(box,text="Top left",grid=[0,0]); PushButton(box,text="Button",grid=[1,0]); Text(box,text="Bottom",grid=[0,1])\napp.display()`,
+      'Styling':`from guizero import App,Text,PushButton\napp=App(title="Styling")\nheading=Text(app,text="Colourful guizero"); heading.text_color="purple"; heading.text_size=24\nbutton=PushButton(app,text="Disable me"); button.bg="gold"\napp.display()`}
+  };
+  /* More realistic classroom examples: small complete programs rather than individual widget demos. */
+  Object.assign(GUI_EXAMPLES.tkinter, {
+    'Login form':`import tkinter as tk\nroot=tk.Tk(); root.title("School Login")\ntk.Label(root,text="Username").grid(row=0,column=0)\nusername=tk.Entry(root); username.grid(row=0,column=1)\ntk.Label(root,text="Password").grid(row=1,column=0)\npassword=tk.Entry(root); password.grid(row=1,column=1)\nstatus=tk.Label(root,text=""); status.grid(row=3,column=0,columnspan=2)\ndef login():\n    if username.get()=="student" and password.get()=="python": status.config(text="Access granted",fg="green")\n    else: status.config(text="Try again",fg="red")\ntk.Button(root,text="Log in",command=login).grid(row=2,column=0,columnspan=2)\nroot.mainloop()`,
+    'Quiz game':`import tkinter as tk\nroot=tk.Tk(); root.title("Computer Science Quiz")\nquestions=[("What does CPU stand for?","central processing unit"),("How many bits are in a byte?","8"),("Which data type stores True or False?","boolean")]\nnumber=0; score=0\nquestion=tk.Label(root,text=questions[0][0]); question.pack()\nanswer=tk.Entry(root); answer.pack()\nfeedback=tk.Label(root,text=""); feedback.pack()\ndef check():\n    global number,score\n    if answer.get().strip().lower()==questions[number][1]: score+=1; feedback.config(text="Correct!",fg="green")\n    else: feedback.config(text="Not quite",fg="red")\n    number+=1; answer.delete(0,tk.END)\n    if number<len(questions): question.config(text=questions[number][0])\n    else: question.config(text=f"Finished! Score: {score}/{len(questions)}"); check_btn.config(state=tk.DISABLED)\ncheck_btn=tk.Button(root,text="Check answer",command=check); check_btn.pack()\nroot.mainloop()`,
+    'Temperature converter':`import tkinter as tk\nroot=tk.Tk(); root.title("Temperature Converter")\ntk.Label(root,text="Celsius").grid(row=0,column=0)\ncelsius=tk.Entry(root); celsius.grid(row=0,column=1)\nresult=tk.Label(root,text=""); result.grid(row=2,column=0,columnspan=2)\ndef convert():\n    try:\n        c=float(celsius.get()); result.config(text=f"{c*9/5+32:.1f} °F",fg="blue")\n    except ValueError: result.config(text="Please enter a number",fg="red")\ntk.Button(root,text="Convert",command=convert).grid(row=1,column=0,columnspan=2)\nroot.mainloop()`,
+    'Cinema booking':`import tkinter as tk\nroot=tk.Tk(); root.title("Cinema Booking")\nfilm=tk.StringVar(value="Space Adventure"); tickets=tk.IntVar(value=1); student=tk.BooleanVar(value=False)\ntk.Label(root,text="Film").pack(); tk.OptionMenu(root,film,"Space Adventure","Robot City","The Algorithm").pack()\ntk.Label(root,text="Tickets").pack(); tk.Spinbox(root,from_=1,to=10,textvariable=tickets).pack()\ntk.Checkbutton(root,text="Student discount",variable=student).pack()\nsummary=tk.Label(root,text=""); summary.pack()\ndef book():\n    price=tickets.get()*8.0*(0.75 if student.get() else 1)\n    summary.config(text=f"{film.get()}: {tickets.get()} ticket(s), £{price:.2f}")\ntk.Button(root,text="Calculate",command=book).pack(); root.mainloop()`,
+    'Revision topic chooser':`import tkinter as tk\nroot=tk.Tk(); root.title("Revision Planner")\ntk.Label(root,text="Choose a topic to revise").pack()\ntopics=tk.Listbox(root,height=6); topics.pack()\nfor topic in ["Algorithms","Programming","Data representation","Networks","Cyber security","Databases"]: topics.insert(tk.END,topic)\nminutes=tk.Scale(root,from_=10,to=60); minutes.pack()\nplan=tk.Label(root,text=""); plan.pack()\ndef make_plan():\n    selected=topics.curselection()\n    plan.config(text=f"Revise {topics.get(selected[0])} for {int(minutes.get())} minutes" if selected else "Select a topic first")\ntk.Button(root,text="Create plan",command=make_plan).pack(); root.mainloop()`,
+    'Traffic light':`import tkinter as tk\nroot=tk.Tk(); root.title("Traffic Lights")\ncanvas=tk.Canvas(root,width=180,height=380,bg="white"); canvas.pack()\nred=canvas.create_oval(40,20,140,120,fill="grey"); amber=canvas.create_oval(40,140,140,240,fill="grey"); green=canvas.create_oval(40,260,140,360,fill="grey")\nstates=[("red",red),("orange",amber),("green",green),("orange",amber)]; pos=0\ndef change():\n    global pos\n    for item in [red,amber,green]: canvas.itemconfig(item,fill="grey")\n    colour,item=states[pos]; canvas.itemconfig(item,fill=colour); pos=(pos+1)%len(states); root.after(1000,change)\nchange(); root.mainloop()`,
+    'Reaction timer':`import tkinter as tk\nroot=tk.Tk(); root.title("Reaction Timer")\nmessage=tk.Label(root,text="Press Start, then wait for GO!"); message.pack()\nbutton=tk.Button(root,text="Start"); button.pack()\nready=False; start_time=0\nimport time, random\ndef go():\n    global ready,start_time\n    ready=True; start_time=time.time(); message.config(text="GO!",fg="green"); button.config(text="CLICK!")\ndef start():\n    global ready\n    if ready:\n        elapsed=(time.time()-start_time)*1000; message.config(text=f"Reaction time: {elapsed:.0f} ms",fg="blue"); ready=False; button.config(text="Start")\n    else:\n        message.config(text="Wait...",fg="black"); root.after(random.randint(1500,3500),go)\nbutton.config(command=start); root.mainloop()`,
+    'Drawing pad':`import tkinter as tk\nroot=tk.Tk(); root.title("Drawing Pad")\ncanvas=tk.Canvas(root,width=500,height=320,bg="white"); canvas.pack()\ncolour=tk.StringVar(value="black")\ncontrols=tk.Frame(root); controls.pack()\nfor c in ["black","red","blue","green"]: tk.Radiobutton(controls,text=c.title(),variable=colour,value=c).pack(side=tk.LEFT)\ndef draw(e): canvas.create_oval(e.x-4,e.y-4,e.x+4,e.y+4,fill=colour.get(),outline=colour.get())\ncanvas.bind("<Motion>",draw)\ntk.Button(root,text="Clear",command=lambda:canvas.delete("all")).pack()\nroot.mainloop()`
+  });
+  Object.assign(GUI_EXAMPLES.guizero, {
+    'Login form':`from guizero import App,Text,TextBox,PushButton\napp=App(title="School Login")\nText(app,text="Username"); username=TextBox(app)\nText(app,text="Password"); password=TextBox(app)\nstatus=Text(app,text="")\ndef login():\n    status.value="Access granted" if username.value=="student" and password.value=="python" else "Try again"\nPushButton(app,text="Log in",command=login); app.display()`,
+    'Temperature converter':`from guizero import App,Text,TextBox,PushButton\napp=App(title="Temperature Converter")\nText(app,text="Temperature in Celsius")\ncelsius=TextBox(app); result=Text(app,text="")\ndef convert():\n    try: result.value=f"{float(celsius.value)*9/5+32:.1f} °F"\n    except ValueError: result.value="Please enter a number"\nPushButton(app,text="Convert",command=convert); app.display()`,
+    'Revision planner':`from guizero import App,Text,ListBox,Slider,PushButton\napp=App(title="Revision Planner")\nText(app,text="Choose a topic")\ntopic=ListBox(app,items=["Algorithms","Programming","Networks","Databases"])\nText(app,text="Minutes")\nminutes=Slider(app,start=10,end=60); plan=Text(app,text="")\ndef create_plan(): plan.value=f"Revise {topic.value} for {int(minutes.value)} minutes" if topic.value else "Choose a topic"\nPushButton(app,text="Create plan",command=create_plan); app.display()`,
+    'Pizza order':`from guizero import App,Text,Combo,CheckBox,PushButton\napp=App(title="Pizza Order")\nText(app,text="Choose a pizza")\npizza=Combo(app,options=["Margherita","Pepperoni","Vegetable"])\nextra=CheckBox(app,text="Extra cheese (£1.50)"); total=Text(app,text="")\ndef calculate(): total.value=f"{pizza.value}: £{8.0 + (1.5 if extra.value else 0):.2f}"\nPushButton(app,text="Calculate",command=calculate); app.display()`,
+    'Score counter':`from guizero import App,Text,PushButton\napp=App(title="Team Score")\nscore=0; display=Text(app,text="0")\ndef add():\n    global score\n    score+=1; display.value=str(score)\ndef reset():\n    global score\n    score=0; display.value="0"\nPushButton(app,text="+1 point",command=add); PushButton(app,text="Reset",command=reset); app.display()`
+  });
+  function renderExamples(){for(const [group,id] of [['tkinter','tk-examples'],['guizero','gz-examples']]){const host=document.getElementById(id);host.innerHTML='';Object.entries(GUI_EXAMPLES[group]).forEach(([name,code])=>{const b=document.createElement('button');b.className='secondary';b.textContent=name;b.onclick=()=>{editor.setValue(code);document.getElementById('filename-input').value=(group==='tkinter'?'tk_':'guizero_')+name.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'.py';document.getElementById('examples-overlay').classList.add('hidden');showToast(name+' example loaded.');};host.appendChild(b);});}}
+  renderExamples();document.getElementById('examples-btn').onclick=()=>document.getElementById('examples-overlay').classList.remove('hidden');document.getElementById('examples-close').onclick=()=>document.getElementById('examples-overlay').classList.add('hidden');
+
 /* ---------- About / disclaimer ---------- */
 document.getElementById('about-btn').addEventListener('click', () => {
   document.getElementById('about-overlay').classList.remove('hidden');
