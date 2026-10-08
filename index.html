@@ -226,6 +226,8 @@
   .about-modal p{ font-size:.85rem; line-height:1.5; color:var(--fg); margin:0 0 .8rem; }
   .about-modal a{ color:var(--cyan); }
   .about-modal code{ font-family:'Fira Code',monospace; font-variant-ligatures:none; font-feature-settings:"liga" 0,"calt" 0,"dlig" 0; -webkit-font-feature-settings:"liga" 0,"calt" 0,"dlig" 0; background:var(--panel-bg); padding:.05rem .3rem; border-radius:3px; }
+  /* Quiz mode */
+  #quiz-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;z-index:1600;padding:1rem}#quiz-overlay.hidden{display:none}.quiz-modal{background:var(--bg);border:1px solid var(--comment);border-radius:9px;width:min(900px,96vw);max-height:92vh;overflow:auto;padding:1rem 1.2rem}.quiz-head,.quiz-actions,.quiz-item-actions,.quiz-student-top,.quiz-nav-actions{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}.quiz-head,.quiz-student-top,.quiz-nav-actions{justify-content:space-between}.quiz-head h2{color:var(--purple);margin:.2rem 0}.quiz-field{display:grid;grid-template-columns:7rem minmax(0,1fr);gap:.7rem;align-items:center;margin:.8rem 0;color:var(--comment);font-size:.8rem}.quiz-field input{background:var(--panel-bg);color:var(--fg);border:1px solid var(--comment);border-radius:5px;padding:.45rem .55rem}#quiz-items{display:flex;flex-direction:column;gap:.55rem;margin:.8rem 0}.quiz-item{display:grid;grid-template-columns:auto 1fr auto;gap:.65rem;align-items:center;background:var(--panel-bg);border:1px solid var(--comment);border-radius:7px;padding:.65rem .75rem}.quiz-item-number{color:var(--purple);font-weight:700}.quiz-item-title{font-weight:600}.quiz-actions{margin-top:1rem}#quiz-student-nav{margin-bottom:.85rem;padding:.7rem;background:var(--panel-bg);border:1px solid var(--comment);border-radius:7px}#quiz-student-title{color:var(--purple);font-weight:700}#quiz-progress{color:var(--comment);font-size:.8rem}#quiz-question-buttons{display:flex;gap:.35rem;flex-wrap:wrap;margin:.6rem 0}#quiz-question-buttons button.current{outline:2px solid var(--cyan)}#quiz-question-buttons button.passed{background:var(--green);color:#132018}#quiz-question-buttons button.attempted:not(.passed){background:var(--orange);color:#2a1b08}#quiz-summary{margin-top:.8rem}.quiz-summary-row{display:grid;grid-template-columns:2rem 1fr auto;gap:.6rem;padding:.45rem 0;border-bottom:1px solid var(--border)}
   .hidden{ display:none !important; }
 </style>
 <script>
@@ -249,7 +251,8 @@
   <input id="upload-input" type="file" accept=".py" class="hidden">
   <button id="tidy-btn" class="secondary" disabled title="Auto-format the code with autopep8 (PEP8 style)">&#129529; Tidy</button>
   <button id="parsons-btn" class="secondary">&#129513; Parsons</button>
-  <button id="exercise-menu-btn" class="secondary">&#9989; Exercises</button>
+  <button id="exercise-menu-btn" class="secondary">&#9989; Exercise</button>
+  <button id="quiz-menu-btn" class="secondary">&#128221; Quiz</button>
   <button id="examples-btn" class="secondary">&#128218; Examples</button>
   <button id="share-btn" class="secondary">&#128279; Share</button>
   <span class="font-size-group">
@@ -265,7 +268,7 @@
 
 <div id="examples-overlay" class="hidden">
   <div class="examples-modal">
-    <div class="examples-head"><h2>GUI Examples</h2><button id="examples-close" class="secondary">Close</button></div>
+    <div class="examples-head"><h2>GUI Examples</h2></div>
     <p>Choose an example to load it into the editor. Your current code will be replaced.</p>
     <div class="examples-cols"><div><h3>Tkinter</h3><div id="tk-examples" class="examples-list"></div></div><div><h3>guizero</h3><div id="gz-examples" class="examples-list"></div></div></div>
   </div>
@@ -329,8 +332,9 @@ print("Hello, world!")
       <ul id="files-list"></ul>
     </div>
     <div class="tab-content hidden" id="tab-exercise">
+      <div id="quiz-student-nav" class="hidden"><div class="quiz-student-top"><span id="quiz-student-title"></span><span id="quiz-progress"></span></div><div id="quiz-question-buttons"></div><div class="quiz-nav-actions"><div><button id="quiz-prev" class="secondary">&#8592; Previous</button> <button id="quiz-next" class="secondary">Next &#8594;</button></div><button id="quiz-finish" class="secondary">Quiz Summary</button></div><div id="quiz-summary" class="hidden"></div></div>
       <div class="exercise-modal" style="width:100%;max-height:none;border:0;padding:.2rem;background:transparent">
-        <div style="display:flex;justify-content:space-between;gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="color:var(--purple);margin:.2rem 0">Exercise Builder</h2><div><button id="exercise-run">Run Tests</button> <button id="exercise-share" class="secondary">Create Student Link</button></div></div>
+        <div style="display:flex;justify-content:space-between;gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="color:var(--purple);margin:.2rem 0">Exercise Builder</h2><div><button id="exercise-run">Run Tests</button> <button id="exercise-share" class="secondary">Create Student Link</button> <button id="exercise-preview" class="secondary">Student Preview</button></div></div>
         <div id="student-exercise-info" class="hidden"><h3 id="exercise-student-title" style="color:var(--cyan);margin:.45rem 0 .25rem"></h3><div id="exercise-student-instructions" style="white-space:pre-wrap;margin-bottom:.65rem"></div><button id="student-run-tests">&#9989; Run Tests</button> <button id="student-reset" class="secondary">Reset starter code</button></div>
         <label>Title<input type="text" id="exercise-title" value="Programming exercise"></label>
         <label>Instructions<textarea id="exercise-instructions" rows="3"></textarea></label>
@@ -350,6 +354,7 @@ print("Hello, world!")
   </section>
 </main>
 
+<div id="quiz-overlay" class="hidden"><div class="quiz-modal"><div class="quiz-head"><h2>Quiz Builder</h2><button id="quiz-close" class="secondary">Close</button></div><label class="quiz-field"><span>Quiz title</span><input id="quiz-title" value="Python Programming Quiz"></label><p style="color:var(--comment);font-size:.8rem">Build each question in the Exercise tab, then add it to the quiz.</p><div id="quiz-items"></div><div class="quiz-actions"><button id="quiz-add-current">+ Add current exercise</button><button id="quiz-save-current" class="secondary" disabled>Save edited exercise</button><button id="quiz-preview" class="secondary">Student Preview</button><button id="quiz-student-link" class="secondary">&#128279; Create Student Quiz Link</button><button id="quiz-teacher-link" class="secondary">&#128279; Share Editable Quiz</button></div></div></div>
 <div id="parsons-overlay" class="hidden">
   <div class="parsons-modal">
     <div class="parsons-header">
@@ -1139,7 +1144,10 @@ let autoOpenPuzzle = false;
 let pendingPuzzleCode = null;
 let pendingVfile = null;
 let pendingExercise = null;
-if (location.hash.startsWith('#exercise=')) {
+let pendingQuiz = null;
+if (location.hash.startsWith('#quiz=')) {
+  try { const decoded=LZString.decompressFromEncodedURIComponent(location.hash.slice(6)); const obj=JSON.parse(decoded); if(obj&&obj.mode==='quiz'&&Array.isArray(obj.exercises)){pendingQuiz=obj;if(!obj.teacherShare&&obj.exercises.length)editorInitialValue=(obj.answers&&obj.answers[0])??obj.exercises[0].starterCode??'';} } catch(e){}
+} else if (location.hash.startsWith('#exercise=')) {
   try { const decoded=LZString.decompressFromEncodedURIComponent(location.hash.slice(10)); const obj=JSON.parse(decoded); if(obj&&obj.mode==='exercise'){pendingExercise=obj;editorInitialValue=obj.starterCode||'';} } catch(e){}
 } else if (location.hash.startsWith('#code=')) {
   try {
@@ -1387,7 +1395,11 @@ editor.on('change', () => {
   // it in the address bar means a later page refresh would silently discard
   // the newer edits and reload the old shared version instead. Drop it, so
   // a refresh falls through to the draft below (the actual latest content).
-  if (location.hash) {
+  // Keep exercise/quiz hashes while a student is working. These hashes contain
+  // the assignment definition needed to reconstruct student mode after Refresh.
+  // Ordinary code/puzzle share hashes are still cleared once their code changes.
+  const isPersistentAssignmentHash = location.hash.startsWith('#exercise=') || location.hash.startsWith('#quiz=');
+  if (location.hash && !isPersistentAssignmentHash) {
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
   }
   clearTimeout(draftSaveTimer);
@@ -2400,7 +2412,7 @@ async function runTests(ex,student=false){
   }
   sum.textContent=passes+' / '+ex.tests.length+' tests passed';switchTab('exercise');
 }
-document.getElementById('exercise-add').onclick=()=>addExerciseTest();document.getElementById('exercise-run').onclick=()=>runTests(collectExercise());document.getElementById('exercise-share').onclick=()=>{const ex=collectExercise(),c=LZString.compressToEncodedURIComponent(JSON.stringify(ex)),url=location.origin+location.pathname+'#exercise='+c;if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>showToast('Student exercise link copied!'));else{location.hash='exercise='+c;showToast('Student URL put in address bar')}};document.getElementById('student-run-tests').onclick=()=>runTests(pendingExercise,true);document.getElementById('student-reset').onclick=()=>{if(pendingExercise)editor.setValue(pendingExercise.starterCode||'')};
+document.getElementById('exercise-add').onclick=()=>addExerciseTest();document.getElementById('exercise-run').onclick=()=>runTests(collectExercise());document.getElementById('exercise-share').onclick=()=>{const ex=collectExercise(),c=LZString.compressToEncodedURIComponent(JSON.stringify(ex)),url=location.origin+location.pathname+'#exercise='+c;if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>showToast('Student exercise link copied!'));else{location.hash='exercise='+c;showToast('Student URL put in address bar')}};document.getElementById('exercise-preview').onclick=()=>{const ex=collectExercise(),c=LZString.compressToEncodedURIComponent(JSON.stringify(ex)),url=location.origin+location.pathname+'#exercise='+c;window.open(url,'_blank','noopener');};document.getElementById('student-run-tests').onclick=()=>runTests(pendingExercise,true);document.getElementById('student-reset').onclick=()=>{if(pendingExercise)editor.setValue(pendingExercise.starterCode||'')};
 function shareStudentExerciseSolution(){
   if(!pendingExercise) return;
   const submission={...pendingExercise,mode:'exercise',starterCode:editor.getValue(),submission:true};
@@ -2444,9 +2456,9 @@ if(pendingExercise){
     document.getElementById('exercise-example').classList.add('hidden');
   }
   ['parsons-btn','new-btn','upload-btn','examples-btn'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
-  document.querySelectorAll('.tab-btn[data-tab="graphics"],.tab-btn[data-tab="files"]').forEach(el=>el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn[data-tab="graphics"],.tab-btn[data-tab="gui"],.tab-btn[data-tab="files"]').forEach(el=>el.classList.add('hidden'));
   document.querySelector('#tab-exercise h2').textContent='Exercise';
-  ['exercise-run','exercise-share','exercise-add'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+  ['exercise-run','exercise-share','exercise-preview','exercise-add'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
   ['exercise-title','exercise-instructions'].forEach(id=>document.getElementById(id)?.closest('label')?.classList.add('hidden'));
   const note=[...document.querySelectorAll('#tab-exercise p')].find(p=>p.textContent.includes('Current editor code'));
   if(note)note.classList.add('hidden');
@@ -2461,6 +2473,18 @@ if(pendingExercise){
   // Capture before the normal Share handler runs so only the exercise-submission link is produced.
   topShare.addEventListener('click',(e)=>{e.stopImmediatePropagation();shareStudentExerciseSolution();},true);
 }
+/* ---------- Quiz mode ---------- */
+let quizDraft={mode:'quiz',version:1,title:'Python Programming Quiz',exercises:[]},quizEditingIndex=-1,quizCurrentIndex=0,quizAnswers=[],quizStatus=[];const cloneData=x=>JSON.parse(JSON.stringify(x));
+function loadQuizEx(ex){document.getElementById('exercise-title').value=ex.title||'Programming exercise';document.getElementById('exercise-instructions').value=ex.instructions||'';document.getElementById('exercise-example-input').value=ex.exampleInput||'';document.getElementById('exercise-example-output').value=ex.exampleOutput||'';document.getElementById('exercise-tests').innerHTML='';exerciseNo=0;(ex.tests||[]).forEach(addExerciseTest);if(!(ex.tests||[]).length)addExerciseTest();editor.setValue(ex.starterCode||'');document.getElementById('exercise-tab-btn').classList.remove('hidden');switchTab('exercise')}
+function renderQB(){let h=document.getElementById('quiz-items');h.innerHTML='';document.getElementById('quiz-title').value=quizDraft.title;if(!quizDraft.exercises.length)h.innerHTML='<p style="color:var(--comment)">No exercises added yet.</p>';quizDraft.exercises.forEach((ex,i)=>{let r=document.createElement('div');r.className='quiz-item';r.innerHTML='<b class="quiz-item-number">'+(i+1)+'.</b><span class="quiz-item-title"></span><div class="quiz-item-actions"></div>';r.querySelector('.quiz-item-title').textContent=ex.title||'Exercise '+(i+1);let a=r.querySelector('.quiz-item-actions'),mk=(t,f)=>{let b=document.createElement('button');b.className='secondary';b.textContent=t;b.onclick=f;return b};let up=mk('↑',()=>{if(i>0){[quizDraft.exercises[i-1],quizDraft.exercises[i]]=[quizDraft.exercises[i],quizDraft.exercises[i-1]];renderQB()}});up.title='Move question up';up.disabled=i===0;let down=mk('↓',()=>{if(i<quizDraft.exercises.length-1){[quizDraft.exercises[i+1],quizDraft.exercises[i]]=[quizDraft.exercises[i],quizDraft.exercises[i+1]];renderQB()}});down.title='Move question down';down.disabled=i===quizDraft.exercises.length-1;a.append(mk('Edit',()=>{quizEditingIndex=i;loadQuizEx(ex);document.getElementById('quiz-save-current').disabled=false;document.getElementById('quiz-overlay').classList.add('hidden')}),mk('Duplicate',()=>{let c=cloneData(ex);c.title=(c.title||'Exercise')+' copy';quizDraft.exercises.splice(i+1,0,c);renderQB()}),up,down,mk('Remove',()=>{if(confirm('Remove this exercise?')){quizDraft.exercises.splice(i,1);renderQB()}}));h.append(r)})}
+function qpayload(){quizDraft.title=document.getElementById('quiz-title').value.trim()||'Python Programming Quiz';return cloneData(quizDraft)}function qurl(q){return location.origin+location.pathname+'#quiz='+LZString.compressToEncodedURIComponent(JSON.stringify(q))}function copyQ(q,msg){let u=qurl(q);navigator.clipboard?.writeText?navigator.clipboard.writeText(u).then(()=>showToast(msg)).catch(()=>showToast('Could not copy quiz link')):(location.href=u)}
+document.getElementById('quiz-menu-btn').onclick=()=>{renderQB();document.getElementById('quiz-overlay').classList.remove('hidden')};document.getElementById('quiz-close').onclick=()=>document.getElementById('quiz-overlay').classList.add('hidden');document.getElementById('quiz-title').oninput=e=>quizDraft.title=e.target.value;document.getElementById('quiz-add-current').onclick=()=>{quizDraft.exercises.push(cloneData(collectExercise()));renderQB();showToast('Exercise added to quiz')};document.getElementById('quiz-save-current').onclick=()=>{if(quizEditingIndex<0)return;quizDraft.exercises[quizEditingIndex]=cloneData(collectExercise());quizEditingIndex=-1;document.getElementById('quiz-save-current').disabled=true;renderQB();showToast('Quiz exercise updated')};document.getElementById('quiz-preview').onclick=()=>{if(!quizDraft.exercises.length)return showToast('Add at least one exercise first');window.open(qurl(qpayload()),'_blank','noopener')};document.getElementById('quiz-student-link').onclick=()=>{if(!quizDraft.exercises.length)return showToast('Add at least one exercise first');copyQ(qpayload(),'Student quiz link copied!')};document.getElementById('quiz-teacher-link').onclick=()=>{if(!quizDraft.exercises.length)return showToast('Add at least one exercise first');let q=qpayload();q.teacherShare=true;copyQ(q,'Editable quiz link copied!')};
+function saveQA(){if(pendingQuiz)quizAnswers[quizCurrentIndex]=editor.getValue()}function renderQN(){let h=document.getElementById('quiz-question-buttons');h.innerHTML='';pendingQuiz.exercises.forEach((ex,i)=>{let b=document.createElement('button');b.className='secondary'+(i===quizCurrentIndex?' current':'')+(quizStatus[i]?.attempted?' attempted':'')+(quizStatus[i]?.passed?' passed':'');b.textContent=(quizStatus[i]?.passed?'✓ ':'')+(i+1);b.onclick=()=>switchQE(i);h.append(b)});document.getElementById('quiz-progress').textContent='Exercise '+(quizCurrentIndex+1)+' of '+pendingQuiz.exercises.length+' · '+quizStatus.filter(x=>x?.passed).length+' passed';document.getElementById('quiz-prev').disabled=quizCurrentIndex===0;document.getElementById('quiz-next').disabled=quizCurrentIndex===pendingQuiz.exercises.length-1}
+function showQE(i){quizCurrentIndex=i;let ex=pendingQuiz.exercises[i];document.getElementById('exercise-student-title').textContent=ex.title||'Exercise '+(i+1);document.getElementById('exercise-student-instructions').textContent=ex.instructions||'';let e=document.getElementById('exercise-example');if(ex.exampleInput||ex.exampleOutput){e.classList.remove('hidden');document.getElementById('exercise-example-input').value=ex.exampleInput||'';document.getElementById('exercise-example-output').value=ex.exampleOutput||''}else e.classList.add('hidden');editor.setValue(quizAnswers[i]??ex.starterCode??'');document.getElementById('exercise-summary').textContent='';document.getElementById('exercise-results').innerHTML='';document.getElementById('quiz-summary').classList.add('hidden');renderQN();switchTab('exercise')}function switchQE(i){if(i<0||i>=pendingQuiz.exercises.length)return;saveQA();showQE(i)}
+async function runQT(){let ex=pendingQuiz.exercises[quizCurrentIndex];await runTests(ex,true);let m=document.getElementById('exercise-summary').textContent.match(/(\d+)\s*\/\s*(\d+)/),p=m?+m[1]:0,t=m?+m[2]:0;quizStatus[quizCurrentIndex]={attempted:true,passes:p,total:t,passed:t>0&&p===t};saveQA();renderQN()}function qSummary(){saveQA();let b=document.getElementById('quiz-summary');b.innerHTML='<h3 style="color:var(--cyan)">Quiz Summary</h3>';pendingQuiz.exercises.forEach((ex,i)=>{let st=quizStatus[i]||{},r=document.createElement('div');r.className='quiz-summary-row';r.innerHTML='<span>'+(i+1)+'.</span><span></span><span>'+(st.attempted?((st.passed?'✓ ':'')+(st.passes||0)+'/'+(st.total||0)+' tests'):'Not attempted')+'</span>';r.children[1].textContent=ex.title||'Exercise '+(i+1);b.append(r)});b.classList.remove('hidden')}function shareQS(){saveQA();let q=cloneData(pendingQuiz);q.submission=true;q.answers=quizAnswers;q.status=quizStatus;copyQ(q,'Quiz submission link copied!')}
+document.getElementById('quiz-prev').onclick=()=>switchQE(quizCurrentIndex-1);document.getElementById('quiz-next').onclick=()=>switchQE(quizCurrentIndex+1);document.getElementById('quiz-finish').onclick=qSummary;
+if(pendingQuiz?.teacherShare){quizDraft=cloneData(pendingQuiz);delete quizDraft.teacherShare;pendingQuiz=null;renderQB();document.getElementById('quiz-overlay').classList.remove('hidden')}else if(pendingQuiz){document.getElementById('about-overlay').classList.add('hidden');document.getElementById('exercise-tab-btn').classList.remove('hidden');document.getElementById('exercise-menu-btn').classList.add('hidden');document.getElementById('quiz-menu-btn').classList.add('hidden');document.getElementById('quiz-student-nav').classList.remove('hidden');document.getElementById('student-exercise-info').classList.remove('hidden');document.getElementById('quiz-student-title').textContent=pendingQuiz.title||'Programming Quiz';['parsons-btn','new-btn','upload-btn','examples-btn'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));document.querySelectorAll('.tab-btn[data-tab="graphics"],.tab-btn[data-tab="gui"],.tab-btn[data-tab="files"]').forEach(x=>x.classList.add('hidden'));document.querySelector('#tab-exercise h2').textContent='Quiz';['exercise-run','exercise-share','exercise-preview','exercise-add'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));['exercise-title','exercise-instructions'].forEach(id=>document.getElementById(id)?.closest('label')?.classList.add('hidden'));document.getElementById('exercise-tests').classList.add('hidden');quizAnswers=Array.isArray(pendingQuiz.answers)?pendingQuiz.answers.slice():pendingQuiz.exercises.map(x=>x.starterCode||'');quizStatus=Array.isArray(pendingQuiz.status)?cloneData(pendingQuiz.status):pendingQuiz.exercises.map(()=>({attempted:false}));showQE(0);document.getElementById('student-run-tests').onclick=runQT;document.getElementById('student-reset').onclick=()=>editor.setValue(pendingQuiz.exercises[quizCurrentIndex].starterCode||'');let sh=document.getElementById('share-btn');sh.innerHTML='&#128279; Share Quiz';sh.addEventListener('click',e=>{e.stopImmediatePropagation();shareQS()},true)}
+
   /* ---------- GUI examples ---------- */
   const GUI_EXAMPLES={
     tkinter:{
@@ -2505,7 +2529,7 @@ if(pendingExercise){
     'Score counter':`from guizero import App,Text,PushButton\napp=App(title="Team Score")\nscore=0; display=Text(app,text="0")\ndef add():\n    global score\n    score+=1; display.value=str(score)\ndef reset():\n    global score\n    score=0; display.value="0"\nPushButton(app,text="+1 point",command=add); PushButton(app,text="Reset",command=reset); app.display()`
   });
   function renderExamples(){for(const [group,id] of [['tkinter','tk-examples'],['guizero','gz-examples']]){const host=document.getElementById(id);host.innerHTML='';Object.entries(GUI_EXAMPLES[group]).forEach(([name,code])=>{const b=document.createElement('button');b.className='secondary';b.textContent=name;b.onclick=()=>{editor.setValue(code);document.getElementById('filename-input').value=(group==='tkinter'?'tk_':'guizero_')+name.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'.py';document.getElementById('examples-overlay').classList.add('hidden');showToast(name+' example loaded.');};host.appendChild(b);});}}
-  renderExamples();document.getElementById('examples-btn').onclick=()=>document.getElementById('examples-overlay').classList.remove('hidden');document.getElementById('examples-close').onclick=()=>document.getElementById('examples-overlay').classList.add('hidden');
+  renderExamples();document.getElementById('examples-btn').onclick=()=>document.getElementById('examples-overlay').classList.toggle('hidden');
 
 /* ---------- About / disclaimer ---------- */
 document.getElementById('about-btn').addEventListener('click', () => {
@@ -2517,7 +2541,7 @@ document.getElementById('about-close').addEventListener('click', () => {
 
 let seenDisclaimer = true;
 try { seenDisclaimer = localStorage.getItem('pyde-seen-disclaimer') === '1'; } catch (e) { /* ignore */ }
-if (!seenDisclaimer && !autoOpenPuzzle) {
+if (!seenDisclaimer && !autoOpenPuzzle && !pendingExercise && !pendingQuiz) {
   document.getElementById('about-overlay').classList.remove('hidden');
   try { localStorage.setItem('pyde-seen-disclaimer', '1'); } catch (e) { /* ignore */ }
 }
