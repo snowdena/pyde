@@ -2,7 +2,7 @@
 
 A self-contained, single-file Python IDE that runs entirely in the browser — no server, no install, no build step.
 
-Inspired by https://github.com/milesberry/pyde and created using copilot.
+Original code taken from... https://github.com/milesberry/pyde and further developed using copilot.
 
 
 ## Exercise Builder
