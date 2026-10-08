@@ -20,6 +20,19 @@ Students can share their code with others if needed (eg they need help from teac
 
 **Share** - in teacher mode (default) will share both code and exercise builder - so you can share with other teachers!
 
+## Quiz - combine a number of exercises into a quiz!
+
+- Click Exercises.
+- Build your first exercise normally.
+- Click Quiz.
+- Give the quiz a title.
+- Click + Add current exercise.
+- Close the Quiz Builder.
+- Alter the exercise builder for question 2.
+- Open Quiz again and add it.
+- Repeat for your remaining questions.
+- Click Create Student Quiz Link.
+
 ## Support for Tkinter and GUIzero  (with examples)
 
 **Tkinter** - Browser-based tkinter compatibility:
