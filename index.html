@@ -151,7 +151,17 @@
     outline:none; padding:0 .2rem; width:12em;
   }
   #tab-graphics{ display:flex; align-items:center; justify-content:center; background:var(--graphics-bg); }
-  #turtle-canvas{ background:#fff; border-radius:4px; }
+    #turtle-canvas{ background:#fff; border-radius:4px; }  
+    #tab-gui{background:var(--graphics-bg);padding:1rem;align-items:flex-start;justify-content:center;}
+    #pyde-gui-root{background:#f4f4f4;color:#222;border:1px solid #777;border-radius:7px;min-width:320px;max-width:100%;padding:12px;font-family:Arial,sans-serif;box-shadow:0 5px 18px rgba(0,0,0,.28);}
+    .pyde-gui-title{font-weight:700;background:#e5e5e5;border-bottom:1px solid #bbb;margin:-12px -12px 12px;padding:8px 12px;border-radius:7px 7px 0 0;}
+    .pyde-gui-widget{margin:5px;max-width:100%;}
+    .pyde-gui-frame{display:flex;flex-direction:column;gap:4px;padding:4px;}
+    .pyde-gui-grid{display:grid;gap:6px;align-items:center;}
+    .pyde-gui-entry,.pyde-gui-text,.pyde-gui-listbox,.pyde-gui-combo{font:inherit;padding:5px;border:1px solid #999;border-radius:4px;background:#fff;color:#111;}
+    .pyde-gui-button{font:inherit;padding:6px 11px;border:1px solid #888;border-radius:5px;background:#eee;color:#111;cursor:pointer;}
+    .pyde-gui-button:hover{background:#ddd;}
+
   #p5-container canvas{ border-radius:4px; }
   #files-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.7rem; }
   .file-entry{ border:1px solid var(--comment); border-radius:6px; padding:.5rem; background:var(--bg); }
@@ -257,7 +267,8 @@
     <p>Share links work the same way: the code is packed into the link itself (after the <code>#</code>), which browsers never send to the server. So a shared link doesn't put anything on our infrastructure &mdash; but it does mean a link can carry <em>any</em> program. Please don't run code from a shared link you don't trust: while your tab is open, that code can still change what's on this page.</p>
     <p>Because Python runs on this same tab, a program with an infinite loop (or a very long <code>time.sleep</code>) will freeze the page completely &mdash; there's currently no way to stop it from here. If that happens, reload the tab to recover.</p>
     <p>Original, licence, and details of how this was built: <a href="https://github.com/milesberry/pyde" target="_blank" rel="noopener">github.com/milesberry/pyde</a>.</p>
-	  <p>Update, licence, and details of further development: <a href="https://github.com/snowdena/pyde" target="_blank" rel="noopener">github.com/snowdena/pyde</a>.</p>
+	<p>Update, licence, and details: <a href="https://github.com/snowdena/pyde" target="_blank" rel="noopener">github.com/snowdena/pyde</a>.</p>
+	
     <button id="about-close">Got it</button>
   </div>
 </div>
@@ -293,6 +304,7 @@ print("Hello, world!")
     <div class="tabs">
       <button class="tab-btn active" data-tab="console">Console</button>
       <button class="tab-btn" data-tab="graphics">Graphics</button>
+      <button id="gui-tab-btn" class="tab-btn" data-tab="gui">GUI</button>
       <button class="tab-btn" data-tab="files">Files</button>
       <button id="exercise-tab-btn" class="tab-btn hidden" data-tab="exercise">Exercises</button>
     </div>
@@ -301,6 +313,7 @@ print("Hello, world!")
       <canvas id="turtle-canvas" width="560" height="440" style="display:none;"></canvas>
       <div id="p5-container" style="display:none;"></div>
     </div>
+    <div class="tab-content hidden" id="tab-gui"><div id="pyde-gui-root"><div class="pyde-gui-title">Python GUI</div><div id="pyde-gui-body"></div></div></div>
     <div class="tab-content hidden" id="tab-files">
       <p id="files-empty">No files written by the program yet.</p>
       <ul id="files-list"></ul>
@@ -801,6 +814,205 @@ _p5_module.__all__ = _p5_all
 sys.modules['p5'] = _p5_module
 `;
 
+  /* ---------- Browser GUI compatibility layer: tkinter + guizero ---------- */
+  const _guiCallbacks = new Map();
+  let _guiNextId = 1;
+  function guiReset(){
+    document.getElementById('pyde-gui-body').innerHTML='';
+    document.querySelector('.pyde-gui-title').textContent='Python GUI';
+    _guiCallbacks.forEach(p=>{try{p.destroy?.()}catch(e){}}); _guiCallbacks.clear(); _guiNextId=1;
+  }
+  function guiEl(id){return document.querySelector('[data-gui-id="'+id+'"]');}
+  window._pydeGuiCreate=function(kind,parentId,optsJson){
+    const o=JSON.parse(String(optsJson||'{}')), id=_guiNextId++;
+    const parent=parentId ? guiEl(parentId) : document.getElementById('pyde-gui-body');
+    let el;
+    if(kind==='Label'||kind==='Text') el=document.createElement('span');
+    else if(kind==='Button'||kind==='PushButton'){el=document.createElement('button');el.className='pyde-gui-button';}
+    else if(kind==='Entry'||kind==='TextBox'){el=document.createElement(o.multiline?'textarea':'input');el.className=o.multiline?'pyde-gui-text':'pyde-gui-entry';}
+    else if(kind==='TextArea'){el=document.createElement('textarea');el.className='pyde-gui-text';}
+    else if(kind==='Listbox'||kind==='ListBox'||kind==='Combo'){el=document.createElement('select');el.className=kind==='Combo'?'pyde-gui-combo':'pyde-gui-listbox'; if(kind!=='Combo')el.size=o.height||5;}
+    else if(kind==='Checkbutton'||kind==='CheckBox'||kind==='Radiobutton'||kind==='RadioButton'){el=document.createElement('label'); const inp=document.createElement('input'); inp.type=(kind==='Radiobutton'||kind==='RadioButton')?'radio':'checkbox'; el.append(inp,document.createTextNode(o.text||''));}
+    else if(kind==='Scale'||kind==='Slider'){el=document.createElement('input');el.type='range';el.min=o.from??o.start??0;el.max=o.to??o.end??100;}
+    else {el=document.createElement('div');el.className='pyde-gui-frame';}
+    el.dataset.guiId=id; el.classList.add('pyde-gui-widget'); parent.appendChild(el); window._pydeGuiConfigure(id,optsJson); return id;
+  };
+  window._pydeGuiConfigure=function(id,optsJson){const el=guiEl(id);if(!el)return;const o=JSON.parse(String(optsJson||'{}'));
+    if(o.text!==undefined){if(el.tagName==='INPUT'&&el.type==='button')el.value=o.text;else if(el.tagName==='BUTTON'||el.tagName==='SPAN')el.textContent=o.text;}
+    if(o.value!==undefined){const input=el.matches('input,textarea,select')?el:el.querySelector('input');if(input)input.value=o.value;}
+    if(o.bg)el.style.background=o.bg;if(o.background)el.style.background=o.background;if(o.fg)el.style.color=o.fg;if(o.text_color)el.style.color=o.text_color;
+    if(o.width!==undefined)el.style.width=typeof o.width==='number'?o.width+'px':o.width;if(o.height!==undefined&&!['SELECT'].includes(el.tagName))el.style.height=typeof o.height==='number'?o.height+'px':o.height;
+    if(o.items&&el.tagName==='SELECT'){el.innerHTML='';o.items.forEach(x=>{const op=document.createElement('option');op.textContent=x;op.value=x;el.appendChild(op);});}
+  };
+  window._pydeGuiLayout=function(id,mode,optsJson){const el=guiEl(id);if(!el)return;const o=JSON.parse(String(optsJson||'{}'));el.style.display='';
+    if(mode==='grid'){const p=el.parentElement;p.classList.add('pyde-gui-grid');el.style.gridRow=String((o.row??0)+1);el.style.gridColumn=String((o.column??0)+1);if(o.columnspan)el.style.gridColumnEnd='span '+o.columnspan;if(o.rowspan)el.style.gridRowEnd='span '+o.rowspan;}
+    else if(mode==='place'){el.style.position='absolute';if(o.x!==undefined)el.style.left=o.x+'px';if(o.y!==undefined)el.style.top=o.y+'px';el.parentElement.style.position='relative';}
+    else {if(o.side==='left'||o.side==='right'){el.parentElement.style.flexDirection='row';} if(o.fill==='x'||o.fill==='both')el.style.width='100%';}
+  };
+  window._pydeGuiGet=function(id){const el=guiEl(id);if(!el)return'';const input=el.matches('input,textarea,select')?el:el.querySelector('input');return input?((input.type==='checkbox'||input.type==='radio')?(input.checked?'1':'0'):input.value):el.textContent;};
+  window._pydeGuiSet=function(id,v){const el=guiEl(id);if(!el)return;const input=el.matches('input,textarea,select')?el:el.querySelector('input');if(input){if(input.type==='checkbox'||input.type==='radio')input.checked=!!v;else input.value=String(v);}else el.textContent=String(v);};
+  window._pydeGuiBind=function(id,eventName,callback){const el=guiEl(id);if(!el)return 0;const key=id+':'+eventName;_guiCallbacks.get(key)?.destroy?.();_guiCallbacks.set(key,callback);const target=el.matches('input,button,select,textarea')?el:(el.querySelector('input')||el);target.addEventListener(eventName,()=>{try{callback()}catch(e){appendConsole(String(e),'stderr')}});return 1;};
+  window._pydeGuiDestroy=function(id){guiEl(id)?.remove();};
+  window._pydeGuiTitle=function(t){document.querySelector('.pyde-gui-title').textContent=String(t);};
+  window._pydeGuiAfter=function(ms,cb){const proxy=cb;const n=setTimeout(()=>{try{proxy()}finally{try{proxy.destroy?.()}catch(e){}}},Number(ms));return n;};
+  window._pydeGuiCancelAfter=function(n){clearTimeout(Number(n));};
+  window._pydeGuiMessage=function(kind,title,msg){if(kind.startsWith('ask'))return confirm(String(title)+'\n\n'+String(msg));alert(String(title)+'\n\n'+String(msg));return 'ok';};
+
+  const TK_GUI_SRC = `
+import sys, types, json
+import js as _js
+from pyodide.ffi import create_proxy
+END='end'; INSERT='insert'; LEFT='left'; RIGHT='right'; TOP='top'; BOTTOM='bottom'; BOTH='both'; X='x'; Y='y'; N='n'; S='s'; E='e'; W='w'; NORMAL='normal'; DISABLED='disabled'
+def _clean(d):
+    out={}
+    for k,v in d.items():
+        if k in ('command','variable','textvariable'): continue
+        try: json.dumps(v); out[k]=v
+        except: out[k]=str(v)
+    return out
+class Variable:
+    def __init__(self, master=None, value=None, name=None): self._v='' if value is None else value; self._widgets=[]
+    def get(self): return self._v
+    def set(self,v):
+        self._v=v
+        for w in self._widgets: _js._pydeGuiSet(w._id,v)
+class StringVar(Variable):
+    def get(self): return str(self._v)
+class IntVar(Variable):
+    def get(self):
+        try:return int(self._v)
+        except:return 0
+class DoubleVar(Variable):
+    def get(self):
+        try:return float(self._v)
+        except:return 0.0
+class BooleanVar(Variable):
+    def get(self): return bool(self._v)
+class Widget:
+    _kind='Frame'
+    def __init__(self, master=None, **kw):
+        self.master=master; self._proxies=[]; self._variable=kw.get('textvariable') or kw.get('variable')
+        self._id=int(_js._pydeGuiCreate(self._kind, getattr(master,'_id',0), json.dumps(_clean(kw))))
+        if self._variable:
+            self._variable._widgets.append(self); _js._pydeGuiSet(self._id,self._variable.get())
+            self.bind('<KeyRelease>', self._sync_var); self.bind('<<ComboboxSelected>>', self._sync_var)
+        if kw.get('command'): self._set_command(kw['command'])
+    def _sync_var(self,*a): self._variable.set(self.get()) if self._variable else None
+    def _set_command(self,fn):
+        p=create_proxy(fn); self._proxies.append(p); _js._pydeGuiBind(self._id,'click',p)
+    def pack(self,**kw): _js._pydeGuiLayout(self._id,'pack',json.dumps(_clean(kw))); return self
+    def grid(self,**kw): _js._pydeGuiLayout(self._id,'grid',json.dumps(_clean(kw))); return self
+    def place(self,**kw): _js._pydeGuiLayout(self._id,'place',json.dumps(_clean(kw))); return self
+    def config(self,**kw):
+        if 'command' in kw:self._set_command(kw['command'])
+        _js._pydeGuiConfigure(self._id,json.dumps(_clean(kw)))
+    configure=config
+    def cget(self,key): return None
+    def get(self,*a): return str(_js._pydeGuiGet(self._id))
+    def insert(self,index,text):
+        cur=self.get(); _js._pydeGuiSet(self._id, str(text)+cur if str(index)=='0' else cur+str(text))
+    def delete(self,*a): _js._pydeGuiSet(self._id,'')
+    def destroy(self): _js._pydeGuiDestroy(self._id)
+    def bind(self,event,func):
+        names={'<Button-1>':'click','<KeyRelease>':'input','<Return>':'change','<<ComboboxSelected>>':'change'}; p=create_proxy(lambda *a:func(None));self._proxies.append(p);_js._pydeGuiBind(self._id,names.get(event,event),p)
+class Tk(Widget):
+    _kind='Root'
+    def __init__(self,**kw): self.master=None;self._id=0;self._proxies=[]
+    def title(self,t): _js._pydeGuiTitle(str(t))
+    def geometry(self,*a): pass
+    def resizable(self,*a): pass
+    def mainloop(self): pass
+    def update(self): pass
+    def destroy(self): _js.guiReset() if hasattr(_js,'guiReset') else None
+    def after(self,ms,func=None,*args):
+        if func is None:return None
+        p=create_proxy(lambda:func(*args));self._proxies.append(p);return _js._pydeGuiAfter(ms,p)
+    def after_cancel(self,n): _js._pydeGuiCancelAfter(n)
+class Toplevel(Tk): pass
+class Frame(Widget): _kind='Frame'
+class LabelFrame(Frame): pass
+class Label(Widget): _kind='Label'
+class Button(Widget): _kind='Button'
+class Entry(Widget): _kind='Entry'
+class Text(Widget): _kind='TextArea'
+class Listbox(Widget): _kind='Listbox'
+class Checkbutton(Widget): _kind='Checkbutton'
+class Radiobutton(Widget): _kind='Radiobutton'
+class Scale(Widget): _kind='Scale'
+class Spinbox(Entry): pass
+class Canvas(Frame): pass
+class Menu(Frame): pass
+class Scrollbar(Frame): pass
+class OptionMenu(Widget):
+    _kind='Combo'
+    def __init__(self,master,variable,*values,**kw): kw['items']=list(values);kw['variable']=variable;super().__init__(master,**kw)
+class _Msg:
+    def showinfo(self,t,m):return _js._pydeGuiMessage('info',t,m)
+    def showwarning(self,t,m):return _js._pydeGuiMessage('warning',t,m)
+    def showerror(self,t,m):return _js._pydeGuiMessage('error',t,m)
+    def askyesno(self,t,m):return bool(_js._pydeGuiMessage('askyesno',t,m))
+    def askokcancel(self,t,m):return bool(_js._pydeGuiMessage('askokcancel',t,m))
+messagebox=_Msg()
+_mod=types.ModuleType('tkinter');_mod.__dict__.update({k:v for k,v in globals().items() if not k.startswith('_')});sys.modules['tkinter']=_mod
+_mm=types.ModuleType('tkinter.messagebox');_mm.showinfo=messagebox.showinfo;_mm.showwarning=messagebox.showwarning;_mm.showerror=messagebox.showerror;_mm.askyesno=messagebox.askyesno;_mm.askokcancel=messagebox.askokcancel;sys.modules['tkinter.messagebox']=_mm
+`;
+  const GUIZERO_SRC = `
+import sys, types, json
+import tkinter as tk
+class _G:
+    def __init__(self): self._widget=None
+    @property
+    def value(self): return self._widget.get()
+    @value.setter
+    def value(self,v):
+        self._widget.delete(0,'end'); self._widget.insert(0,v)
+    @property
+    def visible(self): return True
+    @visible.setter
+    def visible(self,v): pass
+    @property
+    def enabled(self): return True
+    @enabled.setter
+    def enabled(self,v): self._widget.config(state='normal' if v else 'disabled')
+    @property
+    def bg(self): return ''
+    @bg.setter
+    def bg(self,v): self._widget.config(bg=v)
+class App(_G):
+    def __init__(self,title='guizero',width=None,height=None,**kw):self.tk=tk.Tk();self.tk.title(title);self._widget=self.tk
+    def display(self): self.tk.mainloop()
+    def destroy(self): self.tk.destroy()
+class Window(App):
+    def __init__(self,master,title='Window',**kw):super().__init__(title=title,**kw)
+def _parent(master): return getattr(master,'_widget',master)
+class Box(_G):
+    def __init__(self,master,layout='auto',**kw):self._widget=tk.Frame(_parent(master));self._widget.pack()
+class Text(_G):
+    def __init__(self,master,text='',**kw):self._widget=tk.Label(_parent(master),text=text,**kw);self._widget.pack()
+    @property
+    def value(self): return self._widget.get()
+    @value.setter
+    def value(self,v): self._widget.config(text=str(v))
+class TextBox(_G):
+    def __init__(self,master,text='',multiline=False,**kw):self._widget=(tk.Text if multiline else tk.Entry)(_parent(master),**kw);self._widget.pack();self.value=text
+class PushButton(_G):
+    def __init__(self,master,command=None,text='Button',args=None,**kw):
+        cb=(lambda:command(*(args or []))) if command else None;self._widget=tk.Button(_parent(master),text=text,command=cb,**kw);self._widget.pack()
+class CheckBox(_G):
+    def __init__(self,master,text='',**kw):self._v=tk.IntVar(value=0);self._widget=tk.Checkbutton(_parent(master),text=text,variable=self._v,**kw);self._widget.pack()
+    @property
+    def value(self):return self._v.get()
+    @value.setter
+    def value(self,v):self._v.set(v)
+class Combo(_G):
+    def __init__(self,master,options=None,**kw):self._widget=tk.Widget.__new__(tk.Widget);tk.Widget.__init__(self._widget,_parent(master),items=options or []);self._widget.pack()
+class ListBox(Combo): pass
+class RadioButton(Combo): pass
+class Slider(_G):
+    def __init__(self,master,start=0,end=100,**kw):self._widget=tk.Scale(_parent(master),start=start,end=end,**kw);self._widget.pack()
+class Picture(Text): pass
+_mod=types.ModuleType('guizero');_mod.__dict__.update({k:v for k,v in globals().items() if not k.startswith('_')});sys.modules['guizero']=_mod
+`;
 /* Share payloads are either a plain code string (the original format - kept
    so old links never break) or, when a program input file needs to travel
    with it, a JSON object {code, vfileName, vfileContent}. Real Python source
@@ -1758,13 +1970,19 @@ async function runCode() {
 
   const code = editor.getValue();
   const isTurtle = /\bimport\s+turtle\b|\bfrom\s+turtle\s+import\b/.test(code);
+    const isGui = /\bimport\s+tkinter\b|\bfrom\s+tkinter\s+import\b|\bimport\s+guizero\b|\bfrom\s+guizero\s+import\b/.test(code);  
   const isP5 = !isTurtle && (/\bimport\s+p5\b|\bfrom\s+p5\s+import\b/.test(code) || /def\s+draw\s*\(\s*\)\s*:/.test(code));
 
   const turtleCanvas = document.getElementById('turtle-canvas');
   const p5Container = document.getElementById('p5-container');
 
   try {
-    if (isTurtle) {
+      guiReset();
+      if (isGui) {
+        switchTab('gui');
+        await pyodide.runPythonAsync(TK_GUI_SRC);
+        await pyodide.runPythonAsync(GUIZERO_SRC);
+      } else if (isTurtle) {  
       switchTab('graphics');
       turtleCanvas.style.display = 'block';
       p5Container.style.display = 'none';
@@ -1789,7 +2007,7 @@ async function runCode() {
 
     try {
       let handledInline = false;
-      if (!isTurtle && !isP5) {
+      if (!isTurtle && !isP5 && !isGui) {
         handledInline = await tryRunWithInlineInput(code);
       }
       if (!handledInline) {
@@ -1854,6 +2072,7 @@ document.getElementById('new-btn').addEventListener('click', () => {
   document.getElementById('turtle-canvas').style.display = 'none';
   document.getElementById('p5-container').style.display = 'none';
   document.getElementById('p5-container').innerHTML = '';
+    guiReset();  
   clearConsole();
   document.getElementById('files-list').innerHTML = '';
   document.getElementById('files-empty').classList.remove('hidden');
