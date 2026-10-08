@@ -20,7 +20,7 @@ Students can share their code with others if needed (eg they need help from teac
 
 **Share** - in teacher mode (default) will share both code and exercise builder - so you can share with other teachers!
 
-## Support for Tkinter and GUIzero  (not fully tested!)
+## Support for Tkinter and GUIzero  (with examples)
 
 **Tkinter** - Browser-based tkinter compatibility:
 - Tk
