@@ -20,3 +20,41 @@ Students can share their code with others if needed (eg they need help from teac
 
 **Share** - in teacher mode (default) will share both code and exercise builder - so you can share with other teachers!
 
+## Support for Tkinter and GUIzero  (not fully tested!)
+
+**Tkinter** - Browser-based tkinter compatibility:
+- Tk
+- Toplevel
+- Frame
+- Label
+- Button
+- Entry
+- Text
+- Listbox
+- Checkbutton
+- Radiobutton
+- Scale
+- Spinbox
+- OptionMenu
+- StringVar, IntVar, DoubleVar,BooleanVar
+- pack(), grid(), place()
+- callbacks
+- .get(), .insert(), .delete()
+- .config() / .configure()
+- .bind()
+- .after()
+- .message boxes
+
+**GUIzero** - Browser-based guizero compatibility:
+- App
+- Window
+- Box
+- Text
+- TextBox
+- PushButton
+- CheckBox
+- Combo
+- ListBox
+- RadioButton
+- Slider
+- Picture
