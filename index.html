@@ -842,9 +842,28 @@
     overflow-x: auto;
   }
 
-  .parsons-block.dragging {
-    opacity: .4;
+  .parsons-block button {
+    margin-right: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
   }
+
+.parsons-block {
+
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+}
+
+.parsons-block.dragging {
+
+    opacity: 0.35;
+}
+
+.parsons-block:hover {
+
+    cursor: grab;
+}
 
   .parsons-block.correct {
     border-color: var(--green);
@@ -1107,6 +1126,8 @@
   .hidden {
     display: none !important;
   }
+
+  
 </style>
 
 <script>
@@ -3245,40 +3266,276 @@ def _pyde_make_input_generator(source):
   let parsonsOriginal = [];
   let dragEl = null;
 
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    if (arr.length > 1 && arr.join('\n') === parsonsOriginal.join('\n')) {
-      [arr[0], arr[1]] = [arr[1], arr[0]];
-    }
-    return arr;
+function shuffle(arr) {
+
+  for (
+    let i = arr.length - 1;
+    i > 0;
+    i--
+  ) {
+
+    const j =
+      Math.floor(
+        Math.random() *
+        (i + 1)
+      );
+
+    [arr[i], arr[j]] =
+      [arr[j], arr[i]];
   }
 
-  function makeBlock(text) {
-    const div = document.createElement('div');
-    div.className = 'parsons-block';
-    div.draggable = true;
-    div.textContent = text;
-    div.dataset.text = text;
-    div.addEventListener('dragstart', () => {
-      dragEl = div;
-      div.classList.add('dragging');
-    });
-    div.addEventListener('dragend', () => {
-      div.classList.remove('dragging');
-      dragEl = null;
-    });
-    return div;
+  if (
+    arr.length > 1 &&
+    JSON.stringify(arr.map(x => x.text))
+      ===
+    JSON.stringify(
+      parsonsOriginal.map(x => x.text)
+    )
+  ) {
+    [arr[0], arr[1]] =
+      [arr[1], arr[0]];
   }
+
+  return arr;
+}
+
+let activeBlock = null;
+let ghostBlock = null;
+let pointerOffsetX = 0;
+let pointerOffsetY = 0;
+
+
+function makeBlock(lineObj) {
+
+  const div = document.createElement('div');
+
+  div.className = 'parsons-block';
+
+  div.parsonsData = lineObj;
+
+  div.dataset.text = lineObj.text;
+
+  const code =
+    document.createElement('span');
+
+  code.textContent =
+    lineObj.text;
+
+  code.style.display =
+    'inline-block';
+
+  function updateIndent() {
+
+    code.style.marginLeft =
+      (lineObj.studentIndent * 40) + 'px';
+  }
+
+  updateIndent();
+
+  div.appendChild(code);
+
+  div.addEventListener(
+    'pointerdown',
+    startPointerDrag
+  );
+
+  function startPointerDrag(e) {
+
+    e.preventDefault();
+
+    activeBlock = div;
+
+    pointerOffsetX = e.offsetX;
+    pointerOffsetY = e.offsetY;
+
+    ghostBlock =
+      div.cloneNode(true);
+
+    ghostBlock.style.position =
+      'fixed';
+
+    ghostBlock.style.left =
+      e.clientX + 'px';
+
+    ghostBlock.style.top =
+      e.clientY + 'px';
+
+    ghostBlock.style.width =
+      div.offsetWidth + 'px';
+
+    ghostBlock.style.pointerEvents =
+      'none';
+
+    ghostBlock.style.opacity =
+      '0.8';
+
+    ghostBlock.style.zIndex =
+      '9999';
+
+    document.body.appendChild(
+      ghostBlock
+    );
+
+    div.classList.add(
+      'dragging'
+    );
+
+    document.addEventListener(
+      'pointermove',
+      dragMove
+    );
+
+    document.addEventListener(
+      'pointerup',
+      dragEnd
+    );
+  }
+
+  function dragMove(e) {
+
+    if (!activeBlock) return;
+
+    ghostBlock.style.left =
+      (e.clientX - pointerOffsetX) +
+      'px';
+
+    ghostBlock.style.top =
+      (e.clientY - pointerOffsetY) +
+      'px';
+
+    const newIndent =
+      Math.max(
+        0,
+        Math.round(
+          (
+            e.clientX -
+            document
+              .getElementById(
+                'parsons-dropzone'
+              )
+              .getBoundingClientRect()
+              .left
+          ) / 40
+        )
+      );
+
+    lineObj.studentIndent =
+      Math.min(
+        6,
+        newIndent
+      );
+
+    updateIndent();
+
+    updateDropPosition(
+      e.clientX,
+      e.clientY
+    );
+  }
+
+  function dragEnd() {
+
+    document.removeEventListener(
+      'pointermove',
+      dragMove
+    );
+
+    document.removeEventListener(
+      'pointerup',
+      dragEnd
+    );
+
+    if (ghostBlock) {
+
+      ghostBlock.remove();
+      ghostBlock = null;
+    }
+
+    div.classList.remove(
+      'dragging'
+    );
+
+    activeBlock = null;
+  }
+
+  return div;
+}
+
+
+function updateDropPosition(x, y) {
+
+  const containers = [
+
+    document.getElementById(
+      'parsons-tray'
+    ),
+
+    document.getElementById(
+      'parsons-dropzone'
+    )
+
+  ];
+
+  for (const container of containers) {
+
+    const rect =
+      container.getBoundingClientRect();
+
+    if (
+      x < rect.left ||
+      x > rect.right ||
+      y < rect.top ||
+      y > rect.bottom
+    ) {
+      continue;
+    }
+
+    const blocks =
+      [...container.children]
+      .filter(
+        el => el !== activeBlock
+      );
+
+    let inserted = false;
+
+    for (const block of blocks) {
+
+      const r =
+        block.getBoundingClientRect();
+
+      if (
+        y <
+        r.top + r.height / 2
+      ) {
+
+        container.insertBefore(
+          activeBlock,
+          block
+        );
+
+        inserted = true;
+        break;
+      }
+    }
+
+    if (!inserted) {
+
+      container.appendChild(
+        activeBlock
+      );
+    }
+
+    break;
+  }
+}
+
 
   function renderParsonsBlocks(shuffled) {
     const tray = document.getElementById('parsons-tray');
     const dz = document.getElementById('parsons-dropzone');
     tray.innerHTML = '';
     dz.innerHTML = '';
-    shuffled.forEach(line => tray.appendChild(makeBlock(line)));
+    shuffled.forEach(lineObj => tray.appendChild(makeBlock(lineObj)));
     document.getElementById('parsons-result').textContent = '';
     document.getElementById('parsons-result').classList.remove('success');
   }
@@ -3303,51 +3560,156 @@ def _pyde_make_input_generator(source):
     });
   });
 
-  function openParsons(sourceOverride) {
-    const code = sourceOverride !== undefined && sourceOverride !== null ? sourceOverride : editor.getValue();
-    const lines = code.split('\n').filter(l => l.trim() !== '' && !l.trim().startsWith('#'));
-    if (lines.length < 2) {
-      showToast('Need at least 2 lines of code for a puzzle.');
-      return;
-    }
-    parsonsOriginal = lines;
-    renderParsonsBlocks(shuffle(lines.slice()));
-    document.getElementById('parsons-overlay').classList.remove('hidden');
+function openParsons(sourceOverride) {
+
+  const code =
+    sourceOverride !== undefined &&
+    sourceOverride !== null
+      ? sourceOverride
+      : editor.getValue();
+
+  const lines = code
+    .split('\n')
+    .filter(l =>
+      l.trim() !== '' &&
+      !l.trim().startsWith('#')
+    )
+    .map(line => {
+
+      const spaces =
+        line.match(/^\s*/)[0].length;
+
+      return {
+        text: line.trimStart(),
+        indent: Math.floor(spaces / 4),
+        studentIndent: 0
+      };
+    });
+
+  if (lines.length < 2) {
+    showToast('Need at least 2 lines of code for a puzzle.');
+    return;
   }
+
+  parsonsOriginal = lines;
+
+  renderParsonsBlocks(
+    shuffle(lines.slice())
+  );
+
+  document
+    .getElementById('parsons-overlay')
+    .classList.remove('hidden');
+}
+
+
   document.getElementById('parsons-btn').addEventListener('click', () => openParsons(pendingPuzzleCode));
   document.getElementById('parsons-close').addEventListener('click', () => {
     document.getElementById('parsons-overlay').classList.add('hidden');
   });
   document.getElementById('parsons-reset').addEventListener('click', () => {
+    parsonsOriginal = parsonsOriginal.map(line => ({text: line.text, indent: line.indent, studentIndent: 0 }));
     renderParsonsBlocks(shuffle(parsonsOriginal.slice()));
+    document.getElementById('parsons-result').textContent = '';
   });
-  document.getElementById('parsons-check').addEventListener('click', () => {
-    const dz = document.getElementById('parsons-dropzone');
-    const blocks = [...dz.children];
-    let correctCount = 0;
-    blocks.forEach((block, i) => {
-      block.classList.remove('correct', 'incorrect');
-      if (parsonsOriginal[i] === block.dataset.text) {
-        block.classList.add('correct');
-        correctCount++;
-      } else {
-        block.classList.add('incorrect');
-      }
-    });
-    const result = document.getElementById('parsons-result');
-    result.classList.remove('success');
-    if (blocks.length !== parsonsOriginal.length) {
-      result.textContent = blocks.length + '/' + parsonsOriginal.length + ' lines placed, ' + correctCount + ' in the correct position.';
-    } else if (correctCount === parsonsOriginal.length) {
-      result.textContent = 'All lines are in the correct order!';
-      result.classList.add('success');
-      // Solved fairly - now safe to reveal in the editor (matters most for a
-      // shared puzzle link, where the editor never held the real code before this).
-      editor.setValue(parsonsOriginal.join('\n'));
-    } else {
-      result.textContent = correctCount + '/' + parsonsOriginal.length + ' lines in the correct position.';
+document.getElementById('parsons-check').addEventListener('click', () => {
+
+  const dz =
+    document.getElementById(
+      'parsons-dropzone'
+    );
+
+  const blocks =
+    [...dz.children];
+
+  let correctCount = 0;
+
+  blocks.forEach((block, i) => {
+
+    block.classList.remove(
+      'correct',
+      'incorrect'
+    );
+
+    const actual =
+      block.parsonsData;
+
+    const expected =
+      parsonsOriginal[i];
+
+    const lineOK =
+      actual.text === expected.text;
+
+    const indentOK =
+      actual.studentIndent ===
+      expected.indent;
+
+    if (
+      lineOK &&
+      indentOK
+    ) {
+      block.classList.add('correct');
+      correctCount++;
+    }
+    else {
+      block.classList.add('incorrect');
     }
   });
+
+  const result =
+    document.getElementById(
+      'parsons-result'
+    );
+
+  result.classList.remove(
+    'success'
+  );
+
+  if (
+    blocks.length !==
+    parsonsOriginal.length
+  ) {
+
+    result.textContent =
+      blocks.length +
+      '/' +
+      parsonsOriginal.length +
+      ' lines placed.';
+  }
+
+  else if (
+    correctCount ===
+    parsonsOriginal.length
+  ) {
+
+    result.textContent =
+      'Puzzle solved!';
+
+    result.classList.add(
+      'success'
+    );
+
+    editor.setValue(
+      parsonsOriginal
+        .map(line =>
+          "    ".repeat(
+            line.indent
+          ) +
+          line.text
+        )
+        .join("\n")
+    );
+  }
+
+  else {
+
+    result.textContent =
+      correctCount +
+      '/' +
+      parsonsOriginal.length +
+      ' lines correct.';
+  }
+});
 
   document.getElementById('parsons-copy').addEventListener('click', () => {
     const dz = document.getElementById('parsons-dropzone');
@@ -3711,12 +4073,18 @@ async function runQT() {
 
       blocks.forEach((b, i) => {
 
-        if (
-          b.dataset.text !==
-          parsonsOriginal[i]
-        ) {
-          correct = false;
-        }
+const actual =
+  b.parsonsData;
+
+const expected =
+  parsonsOriginal[i];
+
+if (
+  actual.text !== expected.text ||
+  actual.studentIndent !== expected.indent
+) {
+  correct = false;
+}
 
       });
 
