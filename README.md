@@ -11,16 +11,20 @@ Original code taken from... https://github.com/milesberry/pyde and further devel
 
 **Instructions** describe the programming task
 
-**Example** - given the example input what is the expected output.
+**Example input/output** - given the example input what is the expected output.
 
-**Tests** - Create a number of tests to check it works (basic input output matching)
+**Run Tests** - Create a number of tests to check it works (basic input output matching)
 
-**Create student link**  - create a link to the problem in student mode (hide the tests and answers!)
-Students can share their code with others if needed (eg they need help from teacher)
+**Make Parsons**  - turn a coding exercise into a parsons problem
+**Make Exercise**  - turn a parsons problem into a coding exercise
 
-**Share** - in teacher mode (default) will share both code and exercise builder - so you can share with other teachers!
+**Remove indents**  - remove all leading white space from the code to create an indentation problem to solve
+**Shuffle lines**  - remove blank lines and shuffle the lines of code - similar to a parsons problem, but one you can run!
+
+
 
 ## Quiz - combine a number of exercises into a quiz!
+Questions could be all Parsons problems, all coding problems, or a mix!
 
 - Click Exercises.
 - Build your first exercise normally.
