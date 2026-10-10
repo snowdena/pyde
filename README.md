@@ -21,7 +21,8 @@ Original code taken from... https://github.com/milesberry/pyde and further devel
 **Remove indents**  - remove all leading white space from the code to create an indentation problem to solve
 **Shuffle lines**  - remove blank lines and shuffle the lines of code - similar to a parsons problem, but one you can run!
 
-
+## Parsons problems
+Enabled touch control and horizontal drag for indentation too!
 
 ## Quiz - combine a number of exercises into a quiz!
 Questions could be all Parsons problems, all coding problems, or a mix!
