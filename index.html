@@ -228,7 +228,14 @@
     letter-spacing: .06em;
     color: var(--comment);
     border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
+  #copy-code-btn {
+      margin-left: auto;
+  }
+
 
   #editor-panel .CodeMirror {
     height: 100%;
@@ -859,6 +866,15 @@
 
     opacity: 0.35;
 }
+.parsons-block span {
+
+    white-space: pre;
+}
+.parsons-block {
+
+    font-family: inherit;
+    color: inherit;
+}
 
 .parsons-block:hover {
 
@@ -1219,7 +1235,10 @@
 
 <main class="workspace">
   <section class="panel" id="editor-panel">
-    <div class="panel-header">Editor</div>
+    <div class="panel-header">
+      Editor
+      <button id="copy-code-btn" class="secondary">Copy Code</button>
+    </div>
     <textarea id="editor"># Welcome to the Python IDE!
 # Click Run to execute this code in your browser.
 
@@ -3318,7 +3337,8 @@ function makeBlock(lineObj) {
   const code =
     document.createElement('span');
 
-  code.textContent =
+code.innerHTML =
+    lineObj.html ||
     lineObj.text;
 
   code.style.display =
@@ -3461,6 +3481,56 @@ function makeBlock(lineObj) {
   return div;
 }
 
+function getParsonsHighlightedHtml(lineText) {
+
+  const themeClass =
+    'cm-s-' +
+    editor.getOption('theme');
+
+  const temp =
+    CodeMirror(
+      document.createElement('div'),
+      {
+        mode: 'python',
+        value: lineText
+      }
+    );
+
+  const tokens =
+    temp.getLineTokens(0);
+
+  let html = '';
+
+  tokens.forEach(tok => {
+
+    const color =
+      _pyde_tokenColor(
+        themeClass,
+        tok.type
+      );
+
+    html +=
+      '<span style="color:' +
+      color +
+      '">' +
+      _pyde_escapeHtml(
+        lineText.slice(
+          tok.start,
+          tok.end
+        )
+      ) +
+      '</span>';
+  });
+
+  return html;
+}
+
+
+
+
+
+
+
 
 function updateDropPosition(x, y) {
 
@@ -3579,8 +3649,14 @@ function openParsons(sourceOverride) {
       const spaces =
         line.match(/^\s*/)[0].length;
 
+      const trimmed =
+        line.trimStart();
+
       return {
-        text: line.trimStart(),
+        text: trimmed,
+        html: getParsonsHighlightedHtml(
+          trimmed
+        ),
         indent: Math.floor(spaces / 4),
         studentIndent: 0
       };
@@ -3741,6 +3817,7 @@ document.getElementById('parsons-check').addEventListener('click', () => {
   });
 
   if (autoOpenPuzzle) openParsons(pendingPuzzleCode);
+
 
   /* ---------- Exercises ---------- */
   let exerciseNo = 0;
@@ -4277,5 +4354,13 @@ function updateQuestionTypeButton() {
         testresults.style.display = "";
   }
 }
+
+document
+  .getElementById('copy-code-btn')
+  .addEventListener('click', () => {
+    editor.execCommand('selectAll');
+    document.execCommand('copy');
+    showToast('Code copied to clipboard');
+  });
 
 </script>
